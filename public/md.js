@@ -32,20 +32,14 @@
     const raw = md == null ? "" : String(md);
     const src = escapeHtml(raw).replace(/\r\n/g, "\n");
 
-    // fenced code blocks
-    const codeStore = [];
-    let text = src.replace(/```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g, (_m, lang, code) => {
-      const idx = codeStore.length;
-      const language = (lang || "").trim();
-      codeStore.push({ language, code });
-      return `@@CODEBLOCK_${idx}@@`;
-    });
-
-    const lines = text.split("\n");
+    const lines = src.split("\n");
     const out = [];
     let inUl = false;
     let inOl = false;
     let inQuote = false;
+    let inCode = false;
+    let codeLang = "";
+    let codeLines = [];
 
     function closeLists() {
       if (inUl) {
@@ -64,26 +58,49 @@
         inQuote = false;
       }
     }
+    function closeCodeBlock() {
+      if (!inCode) return;
+      closeLists();
+      closeQuote();
+      const cls = codeLang ? ` class="language-${codeLang}"` : "";
+      out.push(`<pre><code${cls}>${codeLines.join("\n")}</code></pre>`);
+      inCode = false;
+      codeLang = "";
+      codeLines = [];
+    }
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trim();
 
+      // fenced code block (standard-ish): ```lang  / closing ```
+      // 允许前后空格
+      const fence = trimmed.match(/^```([a-zA-Z0-9_-]+)?\s*$/);
+      if (fence) {
+        if (!inCode) {
+          // open
+          closeLists();
+          closeQuote();
+          inCode = true;
+          codeLang = (fence[1] || "").trim();
+          codeLines = [];
+        } else {
+          // close
+          closeCodeBlock();
+        }
+        continue;
+      }
+
+      if (inCode) {
+        // keep raw escaped line (preserve indentation & spaces)
+        codeLines.push(line);
+        continue;
+      }
+
       // empty line
       if (!trimmed) {
         closeLists();
         closeQuote();
-        continue;
-      }
-
-      // code block placeholder (as standalone line)
-      const cb = trimmed.match(/^@@CODEBLOCK_(\d+)@@$/);
-      if (cb) {
-        closeLists();
-        closeQuote();
-        const item = codeStore[Number(cb[1])];
-        const cls = item.language ? ` class="language-${item.language}"` : "";
-        out.push(`<pre><code${cls}>${item.code}</code></pre>`);
         continue;
       }
 
@@ -147,14 +164,11 @@
       out.push(`<p>${renderInline(trimmed)}</p>`);
     }
 
+    // unclosed code block: still render as code
+    closeCodeBlock();
     closeLists();
     closeQuote();
-
-    return out.join("\n").replace(/@@CODEBLOCK_(\d+)@@/g, (_m, n) => {
-      const item = codeStore[Number(n)];
-      const cls = item.language ? ` class="language-${item.language}"` : "";
-      return `<pre><code${cls}>${item.code}</code></pre>`;
-    });
+    return out.join("\n");
   }
 
   window.renderMarkdown = renderMarkdown;
