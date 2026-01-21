@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReciteAssistant - 新题/遗忘题学习</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo">RA</div>
+          <div class="title">
+            <div class="name">新题/遗忘题学习</div>
+            <div class="desc">直接给答案 + 按长度倒计时，结束自动下一题</div>
+          </div>
+        </div>
+        <div class="actions">
+          <a class="btn secondary" href="/">学习页</a>
+          <a class="btn secondary" href="/manage.html">题库管理</a>
+          <a class="btn secondary" href="/api/export">导出题库</a>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="sidebar">
+          <div class="panel">
+            <div class="panelTitle">学习范围</div>
+            <div class="field">
+              <div class="label">题库</div>
+              <select id="bankSelect"></select>
+            </div>
+            <div class="field">
+              <div class="label">章节</div>
+              <select id="chapterSelect"></select>
+            </div>
+            <div class="field">
+              <div class="label">小节</div>
+              <select id="sectionSelect"></select>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panelTitle">学习设置</div>
+            <div class="field">
+              <div class="label">每次取题数</div>
+              <input id="limitInput" type="number" min="5" max="500" value="30" />
+            </div>
+            <div class="row">
+              <label class="muted"><input id="includeForgot" type="checkbox" checked /> 遗忘题</label>
+              <label class="muted"><input id="includeNew" type="checkbox" checked /> 新题</label>
+            </div>
+            <button id="startBtn" class="btn primary full">开启学习模式</button>
+            <div class="stats" id="stats"></div>
+          </div>
+
+          <div class="panel subtle">
+            <div class="panelTitle">规则</div>
+            <ul class="tips">
+              <li><b>启动后先等待 10 秒</b>：给大脑“切换任务”的缓冲。</li>
+              <li><b>新题/遗忘题直接给答案</b>：先快速建立正确表征，再靠后续间隔重复巩固。</li>
+              <li><b>倒计时按答案长度</b>：越长的答案，给予更长的阅读+编码时间（有上限）。</li>
+              <li><b>倒计时结束自动下一题</b>：也可随时提前结束。</li>
+            </ul>
+          </div>
+        </aside>
+
+        <section class="content">
+          <div class="card">
+            <div class="cardHeader">
+              <div class="badge" id="stageBadge">未开始</div>
+              <div class="counter" id="kpis">已用 00:00 · 剩余 0 · 预计剩余 00:00</div>
+            </div>
+
+            <div class="question" id="questionTitle">选择范围并开启学习模式</div>
+
+            <div class="answer">
+              <div class="answerHeader">
+                <div class="answerTitle">答案（学习模式下默认显示）</div>
+                <div class="badge" id="timerBadge">--</div>
+              </div>
+              <div id="answerBody" class="answerBody">提示：开启学习模式后，先等待 10 秒再进入第一题。</div>
+            </div>
+
+            <div class="row" style="margin-top: 12px">
+              <button id="skipBtn" class="btn secondary" disabled>提前结束并下一题</button>
+              <button id="stopBtn" class="btn secondary" disabled>结束本轮</button>
+              <div class="muted" id="hint"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/learn-new.js"></script>
+  </body>
+</html>
+

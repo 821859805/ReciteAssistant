@@ -63,6 +63,11 @@ code{ color: #cfe7ff; }
   flex:1;
 }
 
+.layout.layout3{
+  grid-template-columns: 320px 320px 1fr;
+  max-width: 1400px;
+}
+
 .sidebar{ display:flex; flex-direction:column; gap:14px; }
 .content{ display:flex; flex-direction:column; gap:14px; }
 
@@ -251,6 +256,47 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(106,228,255,.45); 
 .stats{ margin-top:10px; color:var(--muted); font-size:12px; line-height: 1.6; }
 .muted{ color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 8px; }
 
+.row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.list{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+.item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 10px;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background: rgba(8,12,25,.40);
+  cursor:pointer;
+}
+.item.active{
+  border-color: rgba(106,228,255,.45);
+  background: linear-gradient(135deg, rgba(106,228,255,.14), rgba(118,255,177,.08));
+}
+.itemMain{ min-width:0; }
+.itemTitle{ font-weight:900; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 220px; }
+.itemMeta{ margin-top:4px; }
+.itemBtns{ display:flex; gap:6px; }
+.miniBtn{
+  padding:6px 8px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background: rgba(8,12,25,.45);
+  color: var(--text);
+  cursor:pointer;
+  font-weight:900;
+  font-size:12px;
+}
+.miniBtn.danger{ border-color: rgba(255,107,107,.25); color: #ffd7d7; }
+.split{
+  display:grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap:14px;
+  margin-top: 10px;
+}
+.listWrap{ min-height: 420px; max-height: 62vh; overflow:auto; padding-right: 6px; }
+.editor{ min-height: 420px; }
+
 .nextHint{
   margin-top: 10px;
   color: var(--muted);
@@ -260,5 +306,8 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(106,228,255,.45); 
 @media (max-width: 980px){
   .layout{ grid-template-columns: 1fr; }
   .rateBtns{ grid-template-columns: repeat(3, 1fr); }
+  .layout.layout3{ grid-template-columns: 1fr; }
+  .split{ grid-template-columns: 1fr; }
+  .itemTitle{ max-width: 100%; }
 }
 

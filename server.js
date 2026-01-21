@@ -88,7 +88,8 @@ function initSrsIfMissing(q) {
       repetitions: 0,
       dueAt: nowIso(),
       lastReviewedAt: null,
-      lapses: 0
+      lapses: 0,
+      lastQuality: null
     };
   }
   if (typeof q.srs.ease !== "number") q.srs.ease = 2.5;
@@ -97,6 +98,7 @@ function initSrsIfMissing(q) {
   if (!q.srs.dueAt) q.srs.dueAt = nowIso();
   if (!("lastReviewedAt" in q.srs)) q.srs.lastReviewedAt = null;
   if (typeof q.srs.lapses !== "number") q.srs.lapses = 0;
+  if (!("lastQuality" in q.srs)) q.srs.lastQuality = null;
 }
 
 function sm2Update(srs, quality) {
@@ -134,7 +136,8 @@ function sm2Update(srs, quality) {
     repetitions,
     dueAt,
     lastReviewedAt: now.toISOString(),
-    lapses
+    lapses,
+    lastQuality: q
   };
 }
 
@@ -145,6 +148,18 @@ function findQuestionById(db, questionId) {
         for (const q of s.questions || []) {
           if (q.id === questionId) return q;
         }
+      }
+    }
+  }
+  return null;
+}
+
+function findQuestionContext(db, questionId) {
+  for (const b of db.banks || []) {
+    for (const c of b.chapters || []) {
+      for (const s of c.sections || []) {
+        const idx = (s.questions || []).findIndex((q) => q.id === questionId);
+        if (idx >= 0) return { bank: b, chapter: c, section: s, index: idx, question: s.questions[idx] };
       }
     }
   }
@@ -196,6 +211,28 @@ app.post("/api/banks", (req, res) => {
   res.json(bank);
 });
 
+app.put("/api/banks/:bankId", (req, res) => {
+  const bankId = String(req.params.bankId);
+  const { name } = req.body || {};
+  if (!name) return res.status(400).json({ error: "invalid_name" });
+  const db = readDb();
+  const bank = db.banks.find((b) => b.id === bankId);
+  if (!bank) return res.status(404).json({ error: "bank_not_found" });
+  bank.name = String(name).trim();
+  writeDb(db);
+  res.json(bank);
+});
+
+app.delete("/api/banks/:bankId", (req, res) => {
+  const bankId = String(req.params.bankId);
+  const db = readDb();
+  const idx = db.banks.findIndex((b) => b.id === bankId);
+  if (idx < 0) return res.status(404).json({ error: "bank_not_found" });
+  db.banks.splice(idx, 1);
+  writeDb(db);
+  res.json({ ok: true });
+});
+
 app.post("/api/chapters", (req, res) => {
   const { bankId, name } = req.body || {};
   if (!bankId || !name) return res.status(400).json({ error: "invalid_params" });
@@ -206,6 +243,34 @@ app.post("/api/chapters", (req, res) => {
   bank.chapters.push(chapter);
   writeDb(db);
   res.json(chapter);
+});
+
+app.put("/api/banks/:bankId/chapters/:chapterId", (req, res) => {
+  const bankId = String(req.params.bankId);
+  const chapterId = String(req.params.chapterId);
+  const { name } = req.body || {};
+  if (!name) return res.status(400).json({ error: "invalid_name" });
+  const db = readDb();
+  const bank = db.banks.find((b) => b.id === bankId);
+  if (!bank) return res.status(404).json({ error: "bank_not_found" });
+  const chapter = bank.chapters.find((c) => c.id === chapterId);
+  if (!chapter) return res.status(404).json({ error: "chapter_not_found" });
+  chapter.name = String(name).trim();
+  writeDb(db);
+  res.json(chapter);
+});
+
+app.delete("/api/banks/:bankId/chapters/:chapterId", (req, res) => {
+  const bankId = String(req.params.bankId);
+  const chapterId = String(req.params.chapterId);
+  const db = readDb();
+  const bank = db.banks.find((b) => b.id === bankId);
+  if (!bank) return res.status(404).json({ error: "bank_not_found" });
+  const idx = bank.chapters.findIndex((c) => c.id === chapterId);
+  if (idx < 0) return res.status(404).json({ error: "chapter_not_found" });
+  bank.chapters.splice(idx, 1);
+  writeDb(db);
+  res.json({ ok: true });
 });
 
 app.post("/api/sections", (req, res) => {
@@ -220,6 +285,38 @@ app.post("/api/sections", (req, res) => {
   chapter.sections.push(section);
   writeDb(db);
   res.json(section);
+});
+
+app.put("/api/banks/:bankId/chapters/:chapterId/sections/:sectionId", (req, res) => {
+  const bankId = String(req.params.bankId);
+  const chapterId = String(req.params.chapterId);
+  const sectionId = String(req.params.sectionId);
+  const { name } = req.body || {};
+  if (!name) return res.status(400).json({ error: "invalid_name" });
+  const db = readDb();
+  const scope = getScope(db, { bankId, chapterId, sectionId });
+  if (!scope.bank) return res.status(404).json({ error: "bank_not_found" });
+  if (!scope.chapter) return res.status(404).json({ error: "chapter_not_found" });
+  if (!scope.section) return res.status(404).json({ error: "section_not_found" });
+  scope.section.name = String(name).trim();
+  writeDb(db);
+  res.json(scope.section);
+});
+
+app.delete("/api/banks/:bankId/chapters/:chapterId/sections/:sectionId", (req, res) => {
+  const bankId = String(req.params.bankId);
+  const chapterId = String(req.params.chapterId);
+  const sectionId = String(req.params.sectionId);
+  const db = readDb();
+  const bank = db.banks.find((b) => b.id === bankId);
+  if (!bank) return res.status(404).json({ error: "bank_not_found" });
+  const chapter = bank.chapters.find((c) => c.id === chapterId);
+  if (!chapter) return res.status(404).json({ error: "chapter_not_found" });
+  const idx = chapter.sections.findIndex((s) => s.id === sectionId);
+  if (idx < 0) return res.status(404).json({ error: "section_not_found" });
+  chapter.sections.splice(idx, 1);
+  writeDb(db);
+  res.json({ ok: true });
 });
 
 app.post("/api/questions", (req, res) => {
@@ -250,6 +347,55 @@ app.post("/api/questions", (req, res) => {
 
   writeDb(db);
   res.json({ ok: true, inserted: inserted.length });
+});
+
+app.post("/api/banks/:bankId/chapters/:chapterId/sections/:sectionId/questions", (req, res) => {
+  const bankId = String(req.params.bankId);
+  const chapterId = String(req.params.chapterId);
+  const sectionId = String(req.params.sectionId);
+  const body = req.body || {};
+  const items = Array.isArray(body.questions) ? body.questions : [body];
+  const db = readDb();
+  const scope = getScope(db, { bankId, chapterId, sectionId });
+  if (!scope.section) return res.status(404).json({ error: "section_not_found" });
+
+  const inserted = [];
+  for (const item of items) {
+    const title = item && item.title ? String(item.title).trim() : "";
+    const content = item && item.content ? String(item.content) : "";
+    if (!title) continue;
+    const q = { id: uuid(), title, content, createdAt: nowIso(), updatedAt: nowIso() };
+    initSrsIfMissing(q);
+    scope.section.questions.push(q);
+    inserted.push(q);
+  }
+  writeDb(db);
+  res.json({ ok: true, inserted: inserted.length });
+});
+
+app.put("/api/questions/:questionId", (req, res) => {
+  const questionId = String(req.params.questionId);
+  const { title, content } = req.body || {};
+  if (!title) return res.status(400).json({ error: "invalid_title" });
+  const db = readDb();
+  const ctx = findQuestionContext(db, questionId);
+  if (!ctx) return res.status(404).json({ error: "question_not_found" });
+  ctx.question.title = String(title).trim();
+  ctx.question.content = content == null ? "" : String(content);
+  ctx.question.updatedAt = nowIso();
+  initSrsIfMissing(ctx.question);
+  writeDb(db);
+  res.json(ctx.question);
+});
+
+app.delete("/api/questions/:questionId", (req, res) => {
+  const questionId = String(req.params.questionId);
+  const db = readDb();
+  const ctx = findQuestionContext(db, questionId);
+  if (!ctx) return res.status(404).json({ error: "question_not_found" });
+  ctx.section.questions.splice(ctx.index, 1);
+  writeDb(db);
+  res.json({ ok: true });
 });
 
 app.get("/api/queue", (req, res) => {
@@ -305,6 +451,48 @@ app.get("/api/queue", (req, res) => {
     mode,
     limit,
     counts: { due: due.length, new: fresh.length, total: all.length },
+    queue
+  });
+});
+
+app.get("/api/queue/learn", (req, res) => {
+  const db = readDb();
+  const bankId = req.query.bankId ? String(req.query.bankId) : null;
+  const chapterId = req.query.chapterId ? String(req.query.chapterId) : null;
+  const sectionId = req.query.sectionId ? String(req.query.sectionId) : null;
+  const limit = req.query.limit ? Math.max(1, Math.min(500, Number(req.query.limit))) : 50;
+  const includeNew = req.query.includeNew == null ? true : String(req.query.includeNew) !== "0";
+  const includeForgot = req.query.includeForgot == null ? true : String(req.query.includeForgot) !== "0";
+
+  const scope = getScope(db, { bankId, chapterId, sectionId });
+  const all = walkQuestions(db, scope);
+  for (const q of all) initSrsIfMissing(q);
+
+  const fresh = [];
+  const forgot = [];
+  for (const q of all) {
+    const isNew = !q.srs.lastReviewedAt && q.srs.repetitions === 0;
+    const isForgot = !!q.srs.lastReviewedAt && q.srs.repetitions === 0;
+    if (includeNew && isNew) fresh.push(q);
+    if (includeForgot && isForgot) forgot.push(q);
+  }
+
+  fresh.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  forgot.sort((a, b) => Date.parse(a.srs.lastReviewedAt) - Date.parse(b.srs.lastReviewedAt));
+
+  const queue = [...forgot.map((q) => ({ q, kind: "forgot" })), ...fresh.map((q) => ({ q, kind: "new" }))]
+    .slice(0, limit)
+    .map(({ q, kind }) => ({
+      id: q.id,
+      title: q.title,
+      content: q.content,
+      kind,
+      srs: q.srs
+    }));
+
+  res.json({
+    limit,
+    counts: { new: fresh.length, forgot: forgot.length, total: all.length },
     queue
   });
 });
