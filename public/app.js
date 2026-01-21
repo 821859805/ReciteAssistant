@@ -18,6 +18,10 @@ function escapeHtml(s) {
     .replaceAll("'", "&#039;");
 }
 
+function countChars(text) {
+  return String(text || "").replace(/\s+/g, "").length;
+}
+
 async function apiGet(path) {
   const res = await fetch(path);
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
@@ -62,6 +66,7 @@ function setCardIdle(msg) {
   $("answerBody").classList.add("hidden");
   $("answerBody").textContent = "";
   $("toggleAnswerBtn").textContent = "显示答案";
+  if ($("reviewCharCount")) $("reviewCharCount").textContent = "字数：0";
   $("recallInput").value = "";
   state.revealed = false;
   setRateEnabled(false);
@@ -96,6 +101,7 @@ function renderQuestion() {
   $("queueBadge").textContent = "复习";
   $("counter").textContent = `${state.idx + 1} / ${total}`;
   $("questionTitle").textContent = q.title;
+  if ($("reviewCharCount")) $("reviewCharCount").textContent = `字数：题目 ${countChars(q.title)} · 答案 ${countChars(q.content)}`;
   $("answerBody").innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "") : escapeHtml(q.content || "（无内容）");
   const root = $("answerBody");
   if (window.applyHighlight) window.applyHighlight(root);

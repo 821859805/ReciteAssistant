@@ -30,6 +30,10 @@ const state = {
   dirty: { content: false }
 };
 
+function countChars(text) {
+  return String(text || "").replace(/\s+/g, "").length;
+}
+
 function escapeHtml(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -96,6 +100,7 @@ function syncEditorFromSelectedQuestion() {
   const qualitySelect = $("qualitySelect");
   const lastReviewedHint = $("lastReviewedHint");
   const resetStateBtn = $("resetStateBtn");
+  const charCountHint = $("charCountHint");
 
   if (!q) {
     contentEl.value = "";
@@ -103,6 +108,7 @@ function syncEditorFromSelectedQuestion() {
     delBtn.disabled = true;
     titleHint.textContent = "未选中题目（请在左侧选择题目）";
     previewEl.innerHTML = `<div class="muted">未选中题目</div>`;
+    if (charCountHint) charCountHint.textContent = "字数：-";
     if (learnedToggle) learnedToggle.checked = false;
     if (qualitySelect) qualitySelect.value = "3";
     if (qualitySelect) qualitySelect.disabled = true;
@@ -117,6 +123,7 @@ function syncEditorFromSelectedQuestion() {
   delBtn.disabled = false;
   contentEl.value = q.content || "";
   titleHint.textContent = `当前题目：${q.title}`;
+  if (charCountHint) charCountHint.textContent = `字数：题目 ${countChars(q.title)} · 答案 ${countChars(q.content)}`;
   previewEl.innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "") : escapeHtml(q.content || "");
   if (window.applyHighlight) window.applyHighlight(previewEl);
   else {
@@ -457,6 +464,9 @@ function bind() {
     state.dirty.content = true;
     $("saveMsg").textContent = "未保存（失去焦点会保存）";
     const previewEl = $("qPreview");
+    const q = selectedQuestion();
+    const charCountHint = $("charCountHint");
+    if (q && charCountHint) charCountHint.textContent = `字数：题目 ${countChars(q.title)} · 答案 ${countChars($("qContent").value)}`;
     if (previewEl && window.renderMarkdown) {
       previewEl.innerHTML = window.renderMarkdown($("qContent").value);
       if (window.applyHighlight) window.applyHighlight(previewEl);

@@ -60,6 +60,10 @@ function countEffectiveChars(content) {
   return text.replace(/\s+/g, "").length;
 }
 
+function countChars(text) {
+  return String(text || "").replace(/\s+/g, "").length;
+}
+
 // 基础时长（秒）：按内容长度给一个“足够背会”的初始预算（再乘以用户节奏系数）
 function baseSecondsFromContent(content) {
   const chars = countEffectiveChars(content);
@@ -173,6 +177,7 @@ function renderIdle() {
     ? window.renderMarkdown("提示：开启学习模式后，先等待 **10 秒** 再进入第一题。")
     : "提示：开启学习模式后，先等待 10 秒再进入第一题。";
   $("hint").textContent = "";
+  if ($("learnCharCount")) $("learnCharCount").textContent = "字数：0";
   $("skipBtn").disabled = true;
   $("stopBtn").disabled = true;
   $("kpis").textContent = "已用 00:00 · 剩余 0 · 预计剩余 00:00";
@@ -187,6 +192,7 @@ function renderWarmup(nowMs) {
     ? window.renderMarkdown("准备期内不会计入题目倒计时，但会计入本轮学习已用时间。")
     : "准备期内不会计入题目倒计时，但会计入本轮学习已用时间。";
   $("hint").textContent = "准备结束后会自动进入第 1 题。";
+  if ($("learnCharCount")) $("learnCharCount").textContent = "字数：0";
   $("skipBtn").disabled = true;
   $("stopBtn").disabled = false;
 }
@@ -198,6 +204,7 @@ function renderRunning(nowMs) {
   const left = Math.ceil(Math.max(0, state.qEndsAt - nowMs) / 1000);
   $("timerBadge").textContent = `${left}s`;
   $("questionTitle").textContent = q.title;
+  if ($("learnCharCount")) $("learnCharCount").textContent = `字数：题目 ${countChars(q.title)} · 答案 ${countChars(q.content)}`;
   $("answerBody").innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "（无内容）") : (q.content || "（无内容）");
   const root = $("answerBody");
   if (window.applyHighlight) window.applyHighlight(root);
@@ -219,6 +226,7 @@ function renderDone() {
     ? window.renderMarkdown("你可以再次开启学习模式：遗忘题/新题会按规则进入队列。")
     : "你可以再次开启学习模式：遗忘题/新题会按规则进入队列。";
   $("hint").textContent = "";
+  if ($("learnCharCount")) $("learnCharCount").textContent = "字数：0";
   $("skipBtn").disabled = true;
   $("stopBtn").disabled = true;
 }
