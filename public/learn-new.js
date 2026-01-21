@@ -23,16 +23,59 @@ function clamp(n, a, b) {
   return Math.max(a, Math.min(b, n));
 }
 
-// 倒计时：按答案长度（中文）估算阅读+编码时间
-// 假设有效字符读取速度约 7 字/秒，并留出 40% 的“编码/复述”缓冲；再加一个基础启动时间。
-function calcSecondsFromContent(content) {
+const LS_PACE = "ra_learn_pace_v2";
+const LS_QTIME = "ra_learn_qtime_v2";
+
+function safeJsonParse(s, fallback) {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return fallback;
+  }
+}
+
+function loadPaceMultiplier() {
+  const v = Number(localStorage.getItem(LS_PACE));
+  // 默认给得更充裕：新题/遗忘题学习要“背会”，不是“扫一遍”
+  if (!Number.isFinite(v) || v <= 0) return 1.6;
+  return clamp(v, 0.9, 4.0);
+}
+
+function savePaceMultiplier(v) {
+  localStorage.setItem(LS_PACE, String(clamp(v, 0.9, 4.0)));
+}
+
+function loadQuestionTimeMap() {
+  const raw = localStorage.getItem(LS_QTIME);
+  const obj = safeJsonParse(raw || "{}", {});
+  return obj && typeof obj === "object" ? obj : {};
+}
+
+function saveQuestionTimeMap(map) {
+  localStorage.setItem(LS_QTIME, JSON.stringify(map));
+}
+
+function countEffectiveChars(content) {
   const text = String(content || "");
-  const chars = text.replace(/\s+/g, "").length;
-  const read = chars / 7;
-  const encode = read * 0.4;
-  const base = 8;
-  const sec = Math.round(base + read + encode);
-  return clamp(sec, 15, 120);
+  return text.replace(/\s+/g, "").length;
+}
+
+// 基础时长（秒）：按内容长度给一个“足够背会”的初始预算（再乘以用户节奏系数）
+function baseSecondsFromContent(content) {
+  const chars = countEffectiveChars(content);
+  // 经验值：基础 30s + 0.30s/字；并给出更大的上限
+  // 200 字 ≈ 90s；500 字 ≈ 180s；1000 字 ≈ 330s
+  const sec = Math.round(30 + chars * 0.3);
+  return clamp(sec, 60, 900);
+}
+
+function calcSecondsForQuestion(q, paceMult, qTimeMap) {
+  const base = Math.round(baseSecondsFromContent(q?.content) * paceMult);
+  const rec = qTimeMap && q && q.id ? qTimeMap[q.id] : null;
+  const avg = rec && typeof rec.avg === "number" ? rec.avg : null;
+  // 单题有历史时，至少给到历史平均的 1.1 倍（留出检索/复述缓冲）
+  const sec = avg ? Math.max(base, Math.round(avg * 1.1)) : base;
+  return clamp(sec, 60, 900);
 }
 
 const state = {
@@ -45,8 +88,12 @@ const state = {
   stage: "idle", // idle | warmup | running | done
   startedAt: null,
   warmupEndsAt: null,
+  qStartedAt: null,
+  qAllocatedSec: null,
+  paceMult: 1.6,
   qEndsAt: null,
-  timer: null
+  timer: null,
+  qTimeMap: {}
 };
 
 function getScope(db, bankId, chapterId) {
@@ -158,7 +205,8 @@ function renderRunning(nowMs) {
     window.__hljsPending = window.__hljsPending || [];
     window.__hljsPending.push(root);
   }
-  $("hint").textContent = `本题倒计时：${state.seconds[state.idx]}s（按答案长度估算）`;
+  const alloc = state.seconds[state.idx];
+  $("hint").textContent = `本题预算：${alloc}s（根据你的背诵耗时自适应，当前节奏系数 x${state.paceMult.toFixed(2)}）`;
   $("skipBtn").disabled = false;
   $("stopBtn").disabled = false;
 }
@@ -175,7 +223,45 @@ function renderDone() {
   $("stopBtn").disabled = true;
 }
 
-async function advanceToNext() {
+function updateAdaptiveTiming(reason) {
+  const q = state.queue[state.idx];
+  if (!q || !state.qStartedAt) return;
+
+  const now = Date.now();
+  const spentSec = clamp(Math.round((now - state.qStartedAt) / 1000), 3, 3600);
+  const allocated = Number(state.qAllocatedSec || state.seconds[state.idx] || 0);
+
+  // 更新单题平均（EWMA）
+  const map = state.qTimeMap || {};
+  const rec = map[q.id] && typeof map[q.id] === "object" ? map[q.id] : { avg: spentSec, n: 0 };
+  const prevAvg = typeof rec.avg === "number" ? rec.avg : spentSec;
+  const nextAvg = rec.n >= 3 ? Math.round(prevAvg * 0.75 + spentSec * 0.25) : Math.round(prevAvg * 0.6 + spentSec * 0.4);
+  map[q.id] = { avg: nextAvg, n: (rec.n || 0) + 1 };
+  state.qTimeMap = map;
+  saveQuestionTimeMap(map);
+
+  // 更新全局节奏系数
+  let mult = state.paceMult || loadPaceMultiplier();
+  if (reason === "auto") {
+    // 倒计时走完仍然强制下一题 => 当前预算偏短，整体拉长
+    mult *= 1.15;
+  } else if (reason === "skip") {
+    // 提前结束视作“背会了”，根据相对耗时调整
+    if (allocated > 0 && spentSec < allocated * 0.5) mult *= 0.95;
+    else if (allocated > 0 && spentSec > allocated * 0.9) mult *= 1.05;
+  }
+  mult = clamp(mult, 0.9, 4.0);
+  state.paceMult = mult;
+  savePaceMultiplier(mult);
+
+  // 用更新后的节奏重算“剩余题目预算”（让预计剩余时间更贴近当前节奏）
+  for (let i = state.idx + 1; i < state.queue.length; i++) {
+    state.seconds[i] = calcSecondsForQuestion(state.queue[i], state.paceMult, state.qTimeMap);
+  }
+}
+
+async function advanceToNext(reason) {
+  updateAdaptiveTiming(reason);
   const current = state.queue[state.idx];
   if (current) {
     // 学习模式默认给一个“还行(3)”的复习质量，避免永远停留在新题/遗忘题池
@@ -195,7 +281,9 @@ async function advanceToNext() {
     setKpis(Date.now());
     return;
   }
-  state.qEndsAt = Date.now() + state.seconds[state.idx] * 1000;
+  state.qStartedAt = Date.now();
+  state.qAllocatedSec = state.seconds[state.idx];
+  state.qEndsAt = state.qStartedAt + state.qAllocatedSec * 1000;
 }
 
 function tick() {
@@ -205,7 +293,9 @@ function tick() {
     renderWarmup(nowMs);
     if (nowMs >= state.warmupEndsAt) {
       state.stage = "running";
-      state.qEndsAt = nowMs + state.seconds[state.idx] * 1000;
+      state.qStartedAt = nowMs;
+      state.qAllocatedSec = state.seconds[state.idx];
+      state.qEndsAt = nowMs + state.qAllocatedSec * 1000;
       renderRunning(nowMs);
     }
     return;
@@ -214,7 +304,7 @@ function tick() {
     renderRunning(nowMs);
     if (nowMs >= state.qEndsAt) {
       // 到点立即下一题
-      advanceToNext();
+      advanceToNext("auto");
     }
   }
 }
@@ -248,8 +338,10 @@ async function startLearning() {
   $("startBtn").disabled = true;
   try {
     stopTimer();
+    state.paceMult = loadPaceMultiplier();
+    state.qTimeMap = loadQuestionTimeMap();
     state.queue = await fetchLearnQueue();
-    state.seconds = state.queue.map((q) => calcSecondsFromContent(q.content));
+    state.seconds = state.queue.map((q) => calcSecondsForQuestion(q, state.paceMult, state.qTimeMap));
     state.idx = 0;
 
     if (state.queue.length === 0) {
@@ -261,6 +353,8 @@ async function startLearning() {
     state.stage = "warmup";
     state.startedAt = Date.now();
     state.warmupEndsAt = state.startedAt + 10_000;
+    state.qStartedAt = null;
+    state.qAllocatedSec = null;
     state.qEndsAt = null;
     $("stopBtn").disabled = false;
     state.timer = setInterval(tick, 250);
@@ -278,6 +372,8 @@ function stopSession() {
   state.idx = 0;
   state.startedAt = null;
   state.warmupEndsAt = null;
+  state.qStartedAt = null;
+  state.qAllocatedSec = null;
   state.qEndsAt = null;
   renderIdle();
 }
@@ -296,7 +392,7 @@ function bindEvents() {
   $("startBtn").addEventListener("click", startLearning);
   $("skipBtn").addEventListener("click", async () => {
     if (state.stage !== "running") return;
-    await advanceToNext();
+    await advanceToNext("skip");
     tick();
   });
   $("stopBtn").addEventListener("click", () => {
