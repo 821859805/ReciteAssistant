@@ -297,44 +297,58 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(106,228,255,.45); 
 .listWrap{ min-height: 420px; max-height: 62vh; overflow:auto; padding-right: 6px; }
 .editor{ min-height: 420px; }
 
-.tree{ margin-top: 10px; display:flex; flex-direction:column; gap:6px; }
+.tree{
+  margin-top: 10px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  max-height: 68vh;
+  overflow:auto;
+  padding-right: 6px;
+}
 .treeNode{ border-radius: 14px; }
 .treeRow{
   display:flex;
   align-items:center;
-  gap:10px;
-  padding:8px 10px;
+  gap:8px;
+  padding:4px 8px;
   border:1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgba(8,12,25,.40);
 }
 .treeNode.active .treeRow{
   border-color: rgba(106,228,255,.45);
   background: linear-gradient(135deg, rgba(106,228,255,.14), rgba(118,255,177,.08));
 }
-.treeDot{ width:10px; height:10px; border-radius:999px; border:1px solid var(--border); flex:0 0 auto; }
+.treeDot{ width:8px; height:8px; border-radius:999px; border:1px solid var(--border); flex:0 0 auto; }
 .treeDot.l1{ background: rgba(106,228,255,.18); }
 .treeDot.l2{ background: rgba(118,255,177,.14); }
 .treeDot.l3{ background: rgba(255,211,106,.12); }
 .treeInput{
   flex: 1 1 auto;
   min-width: 0;
-  padding:8px 10px;
-  border-radius: 12px;
+  padding:6px 8px;
+  border-radius: 10px;
   border:1px solid transparent;
   background: rgba(8,12,25,.18);
   color: var(--text);
   font-weight: 900;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.2;
   outline: none;
 }
 .treeInput:focus{
   border-color: rgba(106,228,255,.45);
   box-shadow: 0 0 0 3px rgba(106,228,255,.10);
 }
-.treeBtns{ display:flex; gap:6px; flex:0 0 auto; }
-.indent1{ margin-left: 18px; }
-.indent2{ margin-left: 38px; }
+.treeBtns{ display:flex; gap:4px; flex:0 0 auto; }
+.tree .miniBtn{
+  padding:4px 6px;
+  border-radius:10px;
+  font-size:11px;
+}
+.indent1{ margin-left: 12px; }
+.indent2{ margin-left: 26px; }
 
 .nextHint{
   margin-top: 10px;
