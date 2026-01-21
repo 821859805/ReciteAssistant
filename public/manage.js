@@ -25,7 +25,9 @@ const api = {
 
 const state = {
   db: null,
-  selected: { bankId: null, chapterId: null, sectionId: null, questionId: null }
+  selected: { bankId: null, chapterId: null, sectionId: null, questionId: null },
+  focusAfterRender: null,
+  dirty: { title: false, content: false }
 };
 
 function escapeHtml(s) {
@@ -53,48 +55,22 @@ function selectedQuestion() {
   return s ? (s.questions || []).find((q) => q.id === state.selected.questionId) || null : null;
 }
 
+function currentScopeText() {
+  const b = selectedBank();
+  const c = selectedChapter();
+  const s = selectedSection();
+  const parts = [b ? b.name : "未选题库", c ? c.name : "未选章节", s ? s.name : "未选小节"];
+  return parts.join(" / ");
+}
+
 async function reloadDb() {
   state.db = await api.get("/api/db");
 }
 
-function renderList(container, items, { selectedId, onSelect, onRename, onDelete, emptyText }) {
-  if (!items || items.length === 0) {
-    container.innerHTML = `<div class="muted">${escapeHtml(emptyText || "暂无")}</div>`;
-    return;
-  }
-  container.innerHTML = items
-    .map((it) => {
-      const isSel = it.id === selectedId;
-      return `
-        <div class="item ${isSel ? "active" : ""}" data-id="${escapeHtml(it.id)}">
-          <div class="itemMain">
-            <div class="itemTitle">${escapeHtml(it.name || it.title || "")}</div>
-            <div class="itemMeta muted">${escapeHtml(it.id)}</div>
-          </div>
-          <div class="itemBtns">
-            <button class="miniBtn rename">改名</button>
-            <button class="miniBtn danger del">删</button>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  container.querySelectorAll(".item").forEach((el) => {
-    const id = el.dataset.id;
-    el.addEventListener("click", (e) => {
-      if (e.target.classList.contains("rename") || e.target.classList.contains("del")) return;
-      onSelect?.(id);
-    });
-    el.querySelector(".rename").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      await onRename?.(id);
-    });
-    el.querySelector(".del").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      await onDelete?.(id);
-    });
-  });
+async function safeBlurSaveQuestion() {
+  // blur 触发保存：避免切换目录时丢改动
+  if (!state.dirty.title && !state.dirty.content) return;
+  await saveQuestionIfNeeded();
 }
 
 function renderQuestions() {
@@ -128,9 +104,11 @@ function renderQuestions() {
     const id = el.dataset.id;
     el.addEventListener("click", (e) => {
       if (e.target.classList.contains("del")) return;
-      state.selected.questionId = id;
-      syncEditorFromSelectedQuestion();
-      renderAll();
+      safeBlurSaveQuestion().finally(() => {
+        state.selected.questionId = id;
+        syncEditorFromSelectedQuestion();
+        renderAll();
+      });
     });
     el.querySelector(".del").addEventListener("click", async (e) => {
       e.stopPropagation();
@@ -143,161 +121,244 @@ function syncEditorFromSelectedQuestion() {
   const q = selectedQuestion();
   $("qTitle").value = q ? q.title : "";
   $("qContent").value = q ? q.content : "";
-  $("saveMsg").textContent = q ? "" : "可直接填写并点击“保存”创建新题。";
+  state.dirty.title = false;
+  state.dirty.content = false;
+  $("saveMsg").textContent = q ? "" : "可直接填写标题/内容，失去焦点会创建新题。";
 }
 
 function renderScopeHint() {
-  const b = selectedBank();
-  const c = selectedChapter();
-  const s = selectedSection();
-  const parts = [b ? b.name : "未选题库", c ? c.name : "未选章节", s ? s.name : "未选小节"];
-  $("scopeHint").textContent = `当前：${parts.join(" / ")}`;
+  $("scopeHint").textContent = `当前：${currentScopeText()}`;
+}
+
+function renderTree() {
+  const tree = $("tree");
+  const banks = state.db?.banks || [];
+  if (banks.length === 0) {
+    tree.innerHTML = `<div class="muted">暂无题库，请先点击“+ 题库”</div>`;
+    return;
+  }
+
+  const html = [];
+  for (const b of banks) {
+    const bankActive = state.selected.bankId === b.id;
+    html.push(`
+      <div class="treeNode ${bankActive ? "active" : ""}" data-level="bank" data-bank-id="${escapeHtml(b.id)}">
+        <div class="treeRow">
+          <span class="treeDot l1"></span>
+          <input class="treeInput" data-level="bank" data-bank-id="${escapeHtml(b.id)}" value="${escapeHtml(b.name)}" />
+          <div class="treeBtns">
+            <button class="miniBtn add" data-action="addChapter" title="新增章节">+章</button>
+            <button class="miniBtn danger del" data-action="delBank" title="删除题库">删</button>
+          </div>
+        </div>
+      </div>
+    `);
+
+    for (const c of b.chapters || []) {
+      const chapActive = bankActive && state.selected.chapterId === c.id;
+      html.push(`
+        <div class="treeNode ${chapActive ? "active" : ""}" data-level="chapter" data-bank-id="${escapeHtml(b.id)}" data-chapter-id="${escapeHtml(c.id)}">
+          <div class="treeRow indent1">
+            <span class="treeDot l2"></span>
+            <input class="treeInput" data-level="chapter" data-bank-id="${escapeHtml(b.id)}" data-chapter-id="${escapeHtml(c.id)}" value="${escapeHtml(
+        c.name
+      )}" />
+            <div class="treeBtns">
+              <button class="miniBtn add" data-action="addSection" title="新增小节">+节</button>
+              <button class="miniBtn danger del" data-action="delChapter" title="删除章节">删</button>
+            </div>
+          </div>
+        </div>
+      `);
+
+      for (const s of c.sections || []) {
+        const secActive = chapActive && state.selected.sectionId === s.id;
+        html.push(`
+          <div class="treeNode ${secActive ? "active" : ""}" data-level="section" data-bank-id="${escapeHtml(b.id)}" data-chapter-id="${escapeHtml(
+          c.id
+        )}" data-section-id="${escapeHtml(s.id)}">
+            <div class="treeRow indent2">
+              <span class="treeDot l3"></span>
+              <input class="treeInput" data-level="section" data-bank-id="${escapeHtml(b.id)}" data-chapter-id="${escapeHtml(
+          c.id
+        )}" data-section-id="${escapeHtml(s.id)}" value="${escapeHtml(s.name)}" />
+              <div class="treeBtns">
+                <button class="miniBtn danger del" data-action="delSection" title="删除小节">删</button>
+              </div>
+            </div>
+          </div>
+        `);
+      }
+    }
+  }
+
+  tree.innerHTML = html.join("");
+
+  // selection click
+  tree.querySelectorAll(".treeNode").forEach((node) => {
+    node.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t.classList && (t.classList.contains("treeInput") || t.classList.contains("miniBtn"))) return;
+      const level = node.dataset.level;
+      const bankId = node.dataset.bankId;
+      const chapterId = node.dataset.chapterId || null;
+      const sectionId = node.dataset.sectionId || null;
+      safeBlurSaveQuestion().finally(() => {
+        state.selected.bankId = bankId || null;
+        state.selected.chapterId = level === "bank" ? null : chapterId;
+        state.selected.sectionId = level === "section" ? sectionId : null;
+        state.selected.questionId = null;
+        syncEditorFromSelectedQuestion();
+        renderAll();
+      });
+    });
+  });
+
+  // inline rename on blur
+  tree.querySelectorAll(".treeInput").forEach((inp) => {
+    inp.addEventListener("focus", () => inp.select());
+    inp.addEventListener("blur", async () => {
+      const level = inp.dataset.level;
+      const name = inp.value.trim();
+      if (!name) {
+        // revert
+        await reloadDb();
+        renderAll();
+        return;
+      }
+      try {
+        if (level === "bank") {
+          await api.put(`/api/banks/${encodeURIComponent(inp.dataset.bankId)}`, { name });
+        } else if (level === "chapter") {
+          await api.put(
+            `/api/banks/${encodeURIComponent(inp.dataset.bankId)}/chapters/${encodeURIComponent(inp.dataset.chapterId)}`,
+            { name }
+          );
+        } else if (level === "section") {
+          await api.put(
+            `/api/banks/${encodeURIComponent(inp.dataset.bankId)}/chapters/${encodeURIComponent(inp.dataset.chapterId)}/sections/${encodeURIComponent(
+              inp.dataset.sectionId
+            )}`,
+            { name }
+          );
+        }
+        await reloadDb();
+        renderAll();
+      } catch (e) {
+        alert(`保存失败：${e.message}`);
+      }
+    });
+  });
+
+  // add/delete buttons
+  tree.querySelectorAll(".miniBtn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const action = btn.dataset.action;
+      const bankId = btn.closest(".treeNode")?.dataset.bankId;
+      const chapterId = btn.closest(".treeNode")?.dataset.chapterId;
+      const sectionId = btn.closest(".treeNode")?.dataset.sectionId;
+      try {
+        if (action === "addChapter") await addChapter(bankId);
+        else if (action === "addSection") await addSection(bankId, chapterId);
+        else if (action === "delBank") await deleteBank(bankId);
+        else if (action === "delChapter") await deleteChapter(bankId, chapterId);
+        else if (action === "delSection") await deleteSection(bankId, chapterId, sectionId);
+      } catch (err) {
+        alert(`操作失败：${err.message}`);
+      }
+    });
+  });
+
+  // post-render focus
+  if (state.focusAfterRender) {
+    const sel = state.focusAfterRender;
+    state.focusAfterRender = null;
+    const el = tree.querySelector(sel);
+    if (el) {
+      el.focus();
+      el.select?.();
+    }
+  }
 }
 
 function renderAll() {
-  const banks = state.db?.banks || [];
-  renderList($("banksList"), banks, {
-    selectedId: state.selected.bankId,
-    emptyText: "暂无题库，请先新增",
-    onSelect: (id) => {
-      state.selected.bankId = id;
-      state.selected.chapterId = null;
-      state.selected.sectionId = null;
-      state.selected.questionId = null;
-      syncEditorFromSelectedQuestion();
-      renderAll();
-    },
-    onRename: async (id) => {
-      const b = banks.find((x) => x.id === id);
-      const name = prompt("题库名称：", b?.name || "");
-      if (!name) return;
-      await api.put(`/api/banks/${encodeURIComponent(id)}`, { name });
-      await reloadDb();
-      renderAll();
-    },
-    onDelete: async (id) => {
-      if (!confirm("删除题库将删除其下全部章节/小节/题目，确认？")) return;
-      await api.del(`/api/banks/${encodeURIComponent(id)}`);
-      if (state.selected.bankId === id) state.selected = { bankId: null, chapterId: null, sectionId: null, questionId: null };
-      await reloadDb();
-      syncEditorFromSelectedQuestion();
-      renderAll();
-    }
-  });
-
-  const bank = selectedBank();
-  const chapters = bank?.chapters || [];
-  renderList($("chaptersList"), chapters, {
-    selectedId: state.selected.chapterId,
-    emptyText: bank ? "暂无章节，请新增" : "请先选择题库",
-    onSelect: (id) => {
-      state.selected.chapterId = id;
-      state.selected.sectionId = null;
-      state.selected.questionId = null;
-      syncEditorFromSelectedQuestion();
-      renderAll();
-    },
-    onRename: async (id) => {
-      if (!bank) return;
-      const c = chapters.find((x) => x.id === id);
-      const name = prompt("章节名称：", c?.name || "");
-      if (!name) return;
-      await api.put(`/api/banks/${encodeURIComponent(bank.id)}/chapters/${encodeURIComponent(id)}`, { name });
-      await reloadDb();
-      renderAll();
-    },
-    onDelete: async (id) => {
-      if (!bank) return;
-      if (!confirm("删除章节将删除其下全部小节/题目，确认？")) return;
-      await api.del(`/api/banks/${encodeURIComponent(bank.id)}/chapters/${encodeURIComponent(id)}`);
-      if (state.selected.chapterId === id) {
-        state.selected.chapterId = null;
-        state.selected.sectionId = null;
-        state.selected.questionId = null;
-      }
-      await reloadDb();
-      syncEditorFromSelectedQuestion();
-      renderAll();
-    }
-  });
-
-  const chapter = selectedChapter();
-  const sections = chapter?.sections || [];
-  renderList($("sectionsList"), sections, {
-    selectedId: state.selected.sectionId,
-    emptyText: chapter ? "暂无小节，请新增" : "请先选择章节",
-    onSelect: (id) => {
-      state.selected.sectionId = id;
-      state.selected.questionId = null;
-      syncEditorFromSelectedQuestion();
-      renderAll();
-    },
-    onRename: async (id) => {
-      if (!bank || !chapter) return;
-      const s = sections.find((x) => x.id === id);
-      const name = prompt("小节名称：", s?.name || "");
-      if (!name) return;
-      await api.put(
-        `/api/banks/${encodeURIComponent(bank.id)}/chapters/${encodeURIComponent(chapter.id)}/sections/${encodeURIComponent(id)}`,
-        { name }
-      );
-      await reloadDb();
-      renderAll();
-    },
-    onDelete: async (id) => {
-      if (!bank || !chapter) return;
-      if (!confirm("删除小节将删除其下全部题目，确认？")) return;
-      await api.del(`/api/banks/${encodeURIComponent(bank.id)}/chapters/${encodeURIComponent(chapter.id)}/sections/${encodeURIComponent(id)}`);
-      if (state.selected.sectionId === id) {
-        state.selected.sectionId = null;
-        state.selected.questionId = null;
-      }
-      await reloadDb();
-      syncEditorFromSelectedQuestion();
-      renderAll();
-    }
-  });
-
+  renderTree();
   renderScopeHint();
   renderQuestions();
 }
 
 async function addBank() {
-  const name = prompt("题库名称：", "Java");
-  if (!name) return;
-  const b = await api.post("/api/banks", { name });
+  const b = await api.post("/api/banks", { name: "新题库" });
   await reloadDb();
   state.selected.bankId = b.id;
   state.selected.chapterId = null;
   state.selected.sectionId = null;
   state.selected.questionId = null;
+  state.focusAfterRender = `.treeInput[data-level="bank"][data-bank-id="${CSS.escape(b.id)}"]`;
   syncEditorFromSelectedQuestion();
   renderAll();
 }
 
-async function addChapter() {
-  const bank = selectedBank();
-  if (!bank) return alert("请先选择题库。");
-  const name = prompt("章节名称：", "基础");
-  if (!name) return;
-  const c = await api.post("/api/chapters", { bankId: bank.id, name });
+async function addChapter(bankId) {
+  const bid = bankId || state.selected.bankId;
+  if (!bid) return alert("请先选择题库。");
+  const c = await api.post("/api/chapters", { bankId: bid, name: "新章节" });
   await reloadDb();
+  state.selected.bankId = bid;
   state.selected.chapterId = c.id;
   state.selected.sectionId = null;
+  state.selected.questionId = null;
+  state.focusAfterRender = `.treeInput[data-level="chapter"][data-bank-id="${CSS.escape(bid)}"][data-chapter-id="${CSS.escape(c.id)}"]`;
+  syncEditorFromSelectedQuestion();
+  renderAll();
+}
+
+async function addSection(bankId, chapterId) {
+  const bid = bankId || state.selected.bankId;
+  const cid = chapterId || state.selected.chapterId;
+  if (!bid || !cid) return alert("请先选择题库和章节。");
+  const s = await api.post("/api/sections", { bankId: bid, chapterId: cid, name: "新小节" });
+  await reloadDb();
+  state.selected.bankId = bid;
+  state.selected.chapterId = cid;
+  state.selected.sectionId = s.id;
+  state.selected.questionId = null;
+  state.focusAfterRender = `.treeInput[data-level="section"][data-bank-id="${CSS.escape(bid)}"][data-chapter-id="${CSS.escape(cid)}"][data-section-id="${CSS.escape(
+    s.id
+  )}"]`;
+  syncEditorFromSelectedQuestion();
+  renderAll();
+}
+
+async function deleteBank(bankId) {
+  if (!bankId) return;
+  if (!confirm("删除题库将删除其下全部章节/小节/题目，确认？")) return;
+  await api.del(`/api/banks/${encodeURIComponent(bankId)}`);
+  await reloadDb();
+  if (state.selected.bankId === bankId) state.selected = { bankId: null, chapterId: null, sectionId: null, questionId: null };
+  syncEditorFromSelectedQuestion();
+  renderAll();
+}
+
+async function deleteChapter(bankId, chapterId) {
+  if (!bankId || !chapterId) return;
+  if (!confirm("删除章节将删除其下全部小节/题目，确认？")) return;
+  await api.del(`/api/banks/${encodeURIComponent(bankId)}/chapters/${encodeURIComponent(chapterId)}`);
+  await reloadDb();
+  if (state.selected.chapterId === chapterId) state.selected.chapterId = null;
+  if (state.selected.sectionId) state.selected.sectionId = null;
   state.selected.questionId = null;
   syncEditorFromSelectedQuestion();
   renderAll();
 }
 
-async function addSection() {
-  const bank = selectedBank();
-  const chapter = selectedChapter();
-  if (!bank || !chapter) return alert("请先选择题库和章节。");
-  const name = prompt("小节名称：", "概念");
-  if (!name) return;
-  const s = await api.post("/api/sections", { bankId: bank.id, chapterId: chapter.id, name });
+async function deleteSection(bankId, chapterId, sectionId) {
+  if (!bankId || !chapterId || !sectionId) return;
+  if (!confirm("删除小节将删除其下全部题目，确认？")) return;
+  await api.del(`/api/banks/${encodeURIComponent(bankId)}/chapters/${encodeURIComponent(chapterId)}/sections/${encodeURIComponent(sectionId)}`);
   await reloadDb();
-  state.selected.sectionId = s.id;
+  if (state.selected.sectionId === sectionId) state.selected.sectionId = null;
   state.selected.questionId = null;
   syncEditorFromSelectedQuestion();
   renderAll();
@@ -308,17 +369,23 @@ function newQuestion() {
   state.selected.questionId = null;
   syncEditorFromSelectedQuestion();
   renderAll();
+  $("qTitle").focus();
 }
 
-async function saveQuestion() {
+async function saveQuestionIfNeeded() {
   const bank = selectedBank();
   const chapter = selectedChapter();
   const section = selectedSection();
-  if (!bank || !chapter || !section) return alert("请先选择到具体小节。");
+  if (!bank || !chapter || !section) return;
 
   const title = $("qTitle").value.trim();
   const content = $("qContent").value;
-  if (!title) return alert("题目标题不能为空。");
+  if (!title) {
+    $("saveMsg").textContent = "标题为空，未保存。";
+    state.dirty.title = false;
+    state.dirty.content = false;
+    return;
+  }
 
   $("saveMsg").textContent = "保存中…";
   try {
@@ -337,6 +404,8 @@ async function saveQuestion() {
     // 自动选中新创建/更新的题（新建时选最后一个）
     const sec = selectedSection();
     if (!state.selected.questionId && sec?.questions?.length) state.selected.questionId = sec.questions[sec.questions.length - 1].id;
+    state.dirty.title = false;
+    state.dirty.content = false;
     renderAll();
   } catch (e) {
     $("saveMsg").textContent = `保存失败：${e.message}`;
@@ -370,13 +439,25 @@ async function importDbFile(file) {
 
 function bind() {
   $("addBankBtn").addEventListener("click", addBank);
-  $("addChapterBtn").addEventListener("click", addChapter);
-  $("addSectionBtn").addEventListener("click", addSection);
   $("newQuestionBtn").addEventListener("click", newQuestion);
-  $("saveQuestionBtn").addEventListener("click", saveQuestion);
   $("deleteQuestionBtn").addEventListener("click", async () => {
     if (!state.selected.questionId) return;
     await deleteQuestion(state.selected.questionId);
+  });
+
+  $("qTitle").addEventListener("input", () => {
+    state.dirty.title = true;
+    $("saveMsg").textContent = "未保存（失去焦点会保存）";
+  });
+  $("qContent").addEventListener("input", () => {
+    state.dirty.content = true;
+    $("saveMsg").textContent = "未保存（失去焦点会保存）";
+  });
+  $("qTitle").addEventListener("blur", () => {
+    saveQuestionIfNeeded();
+  });
+  $("qContent").addEventListener("blur", () => {
+    saveQuestionIfNeeded();
   });
 
   $("importFile").addEventListener("change", async (e) => {

@@ -27,41 +27,25 @@
         </div>
       </header>
 
-      <main class="layout layout3">
+      <main class="layout">
         <aside class="sidebar">
           <div class="panel">
-            <div class="panelTitle">题库</div>
+            <div class="panelTitle">目录（三级：题库 / 章节 / 小节）</div>
             <div class="row">
-              <button id="addBankBtn" class="btn secondary">新增题库</button>
+              <button id="addBankBtn" class="btn secondary">+ 题库</button>
+              <div class="muted">左侧直接改名，失去焦点自动保存</div>
             </div>
-            <div id="banksList" class="list"></div>
-          </div>
-        </aside>
-
-        <aside class="sidebar">
-          <div class="panel">
-            <div class="panelTitle">章节</div>
-            <div class="row">
-              <button id="addChapterBtn" class="btn secondary">新增章节</button>
-            </div>
-            <div id="chaptersList" class="list"></div>
-          </div>
-
-          <div class="panel">
-            <div class="panelTitle">小节</div>
-            <div class="row">
-              <button id="addSectionBtn" class="btn secondary">新增小节</button>
-            </div>
-            <div id="sectionsList" class="list"></div>
+            <div id="tree" class="tree"></div>
           </div>
         </aside>
 
         <section class="content">
           <div class="panel">
-            <div class="panelTitle">题目</div>
+            <div class="panelTitle">题目（当前小节）</div>
             <div class="row">
-              <button id="newQuestionBtn" class="btn secondary">新增题目</button>
+              <button id="newQuestionBtn" class="btn secondary">+ 题目</button>
               <div class="muted" id="scopeHint"></div>
+              <div class="muted" id="saveMsg"></div>
             </div>
             <div class="split">
               <div class="listWrap">
@@ -69,17 +53,16 @@
               </div>
               <div class="editor">
                 <div class="field">
-                  <div class="label">题目标题</div>
+                  <div class="label">题目标题（失去焦点自动保存）</div>
                   <input id="qTitle" placeholder="例如：HashMap 与 ConcurrentHashMap 有何区别？" />
                 </div>
                 <div class="field">
-                  <div class="label">答案内容</div>
+                  <div class="label">答案内容（失去焦点自动保存）</div>
                   <textarea id="qContent" placeholder="建议结构：定义 → 原理 → 细节 → 例子 → 对比 → 场景/调优"></textarea>
                 </div>
                 <div class="row">
-                  <button id="saveQuestionBtn" class="btn primary">保存</button>
-                  <button id="deleteQuestionBtn" class="btn secondary">删除</button>
-                  <div class="muted" id="saveMsg"></div>
+                  <button id="deleteQuestionBtn" class="btn secondary">删除该题</button>
+                  <div class="muted">提示：切换题目/目录时会触发失焦保存</div>
                 </div>
               </div>
             </div>
