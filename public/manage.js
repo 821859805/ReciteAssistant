@@ -51,6 +51,24 @@ function selectedQuestion() {
   return c ? (c.questions || []).find((q) => q.id === state.selected.questionId) || null : null;
 }
 
+function ensureSelectionValid() {
+  const bank = selectedBank();
+  if (!bank) {
+    state.selected.bankId = null;
+    state.selected.chapterId = null;
+    state.selected.questionId = null;
+    return;
+  }
+  const chapter = selectedChapter();
+  if (!chapter) {
+    state.selected.chapterId = null;
+    state.selected.questionId = null;
+    return;
+  }
+  const q = selectedQuestion();
+  if (!q) state.selected.questionId = null;
+}
+
 function currentScopeText() {
   const b = selectedBank();
   const c = selectedChapter();
@@ -98,7 +116,7 @@ function renderScopeHint() {
 
 function renderTree() {
   const tree = $("tree");
-  const banks = state.db?.banks || [];
+  const banks = (state.db?.banks || []).filter(Boolean);
   if (banks.length === 0) {
     tree.innerHTML = `<div class="muted">暂无题库，请先点击“+ 题库”</div>`;
     return;
@@ -120,7 +138,8 @@ function renderTree() {
       </div>
     `);
 
-    for (const c of b.chapters || []) {
+    const chapters = (Array.isArray(b.chapters) ? b.chapters : []).filter(Boolean);
+    for (const c of chapters) {
       const chapActive = bankActive && state.selected.chapterId === c.id;
       html.push(`
         <div class="treeNode ${chapActive ? "active" : ""}" data-level="chapter" data-bank-id="${escapeHtml(b.id)}" data-chapter-id="${escapeHtml(c.id)}">
@@ -138,7 +157,8 @@ function renderTree() {
       `);
 
       // questions under chapter
-      for (const q of c.questions || []) {
+      const questions = (Array.isArray(c.questions) ? c.questions : []).filter(Boolean);
+      for (const q of questions) {
         const qActive = chapActive && state.selected.questionId === q.id;
         const meta = q.srs?.lastReviewedAt ? `上次：${new Date(q.srs.lastReviewedAt).toLocaleDateString()}` : "未学";
         html.push(`
@@ -302,7 +322,11 @@ async function addQuestion(bankId, chapterId) {
     content: ""
   });
   await reloadDb();
-  const chap = (state.db?.banks || []).find((b) => b.id === bid)?.chapters?.find((c) => c.id === cid);
+  const chap = (state.db?.banks || [])
+    .filter(Boolean)
+    .find((b) => b.id === bid)
+    ?.chapters?.filter(Boolean)
+    ?.find((c) => c.id === cid);
   const lastId = chap?.questions?.length ? chap.questions[chap.questions.length - 1].id : null;
   state.selected.bankId = bid;
   state.selected.chapterId = cid;
@@ -324,8 +348,9 @@ async function updateQuestionTitle(questionId, newTitle) {
   if (!qid) return;
   // 保持内容不丢失：用当前 DB 里的内容回填
   const q = (state.db?.banks || [])
-    .flatMap((b) => b.chapters || [])
-    .flatMap((c) => c.questions || [])
+    .filter(Boolean)
+    .flatMap((b) => (Array.isArray(b.chapters) ? b.chapters.filter(Boolean) : []))
+    .flatMap((c) => (Array.isArray(c.questions) ? c.questions.filter(Boolean) : []))
     .find((x) => x.id === qid);
   const content = q?.content || "";
   await api.put(`/api/questions/${encodeURIComponent(qid)}`, { title: newTitle, content });
@@ -356,6 +381,7 @@ async function deleteQuestion(questionId) {
   await api.del(`/api/questions/${encodeURIComponent(questionId)}`);
   if (state.selected.questionId === questionId) state.selected.questionId = null;
   await reloadDb();
+  ensureSelectionValid();
   syncEditorFromSelectedQuestion();
   renderAll();
 }
@@ -408,6 +434,7 @@ function bind() {
 async function main() {
   bind();
   await reloadDb();
+  ensureSelectionValid();
   renderAll();
   syncEditorFromSelectedQuestion();
 }
