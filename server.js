@@ -408,7 +408,8 @@ app.delete("/api/questions/:questionId", (req, res) => {
   const db = readDb();
   const ctx = findQuestionContext(db, questionId);
   if (!ctx) return res.status(404).json({ error: "question_not_found" });
-  ctx.section.questions.splice(ctx.index, 1);
+  if (!ctx.chapter || !Array.isArray(ctx.chapter.questions)) return res.status(500).json({ error: "chapter_questions_missing" });
+  ctx.chapter.questions.splice(ctx.index, 1);
   writeDb(db);
   res.json({ ok: true });
 });
