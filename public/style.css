@@ -342,6 +342,7 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(106,228,255,.45); 
   box-shadow: 0 0 0 3px rgba(106,228,255,.10);
 }
 .treeBtns{ display:flex; gap:4px; flex:0 0 auto; }
+.treeMeta{ flex:0 0 auto; margin-right: 6px; white-space: nowrap; }
 .tree .miniBtn{
   padding:4px 6px;
   border-radius:10px;

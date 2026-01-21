@@ -27,7 +27,7 @@ const state = {
   db: null,
   selected: { bankId: null, chapterId: null, questionId: null },
   focusAfterRender: null,
-  dirty: { title: false, content: false }
+  dirty: { content: false }
 };
 
 function escapeHtml(s) {
@@ -64,61 +64,32 @@ async function reloadDb() {
 
 async function safeBlurSaveQuestion() {
   // blur 触发保存：避免切换目录时丢改动
-  if (!state.dirty.title && !state.dirty.content) return;
-  await saveQuestionIfNeeded();
-}
-
-function renderQuestions() {
-  const chap = selectedChapter();
-  const list = $("questionsList");
-  const items = chap?.questions || [];
-  const selectedId = state.selected.questionId;
-  if (items.length === 0) {
-    list.innerHTML = `<div class="muted">暂无题目</div>`;
-    return;
-  }
-  list.innerHTML = items
-    .map((q) => {
-      const isSel = q.id === selectedId;
-      const meta = q.srs?.lastReviewedAt ? `上次：${new Date(q.srs.lastReviewedAt).toLocaleString()}` : "未学习";
-      return `
-        <div class="item ${isSel ? "active" : ""}" data-id="${escapeHtml(q.id)}">
-          <div class="itemMain">
-            <div class="itemTitle">${escapeHtml(q.title)}</div>
-            <div class="itemMeta muted">${escapeHtml(meta)}</div>
-          </div>
-          <div class="itemBtns">
-            <button class="miniBtn danger del">删</button>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  list.querySelectorAll(".item").forEach((el) => {
-    const id = el.dataset.id;
-    el.addEventListener("click", (e) => {
-      if (e.target.classList.contains("del")) return;
-      safeBlurSaveQuestion().finally(() => {
-        state.selected.questionId = id;
-        syncEditorFromSelectedQuestion();
-        renderAll();
-      });
-    });
-    el.querySelector(".del").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      await deleteQuestion(id);
-    });
-  });
+  if (!state.dirty.content) return;
+  await saveQuestionContentIfNeeded();
 }
 
 function syncEditorFromSelectedQuestion() {
   const q = selectedQuestion();
-  $("qTitle").value = q ? q.title : "";
-  $("qContent").value = q ? q.content : "";
-  state.dirty.title = false;
+  const contentEl = $("qContent");
+  const delBtn = $("deleteQuestionBtn");
+  const titleHint = $("questionTitleHint");
+
+  if (!q) {
+    contentEl.value = "";
+    contentEl.disabled = true;
+    delBtn.disabled = true;
+    titleHint.textContent = "未选中题目（请在左侧选择题目）";
+    $("saveMsg").textContent = "";
+    state.dirty.content = false;
+    return;
+  }
+
+  contentEl.disabled = false;
+  delBtn.disabled = false;
+  contentEl.value = q.content || "";
+  titleHint.textContent = `当前题目：${q.title}`;
   state.dirty.content = false;
-  $("saveMsg").textContent = q ? "" : "可直接填写标题/内容，失去焦点会创建新题。";
+  $("saveMsg").textContent = "";
 }
 
 function renderScopeHint() {
@@ -159,11 +130,32 @@ function renderTree() {
         c.name
       )}" />
             <div class="treeBtns">
+              <button class="miniBtn add" data-action="addQuestion" title="新增题目">+题</button>
               <button class="miniBtn danger del" data-action="delChapter" title="删除章节">删</button>
             </div>
           </div>
         </div>
       `);
+
+      // questions under chapter
+      for (const q of c.questions || []) {
+        const qActive = chapActive && state.selected.questionId === q.id;
+        const meta = q.srs?.lastReviewedAt ? `上次：${new Date(q.srs.lastReviewedAt).toLocaleDateString()}` : "未学";
+        html.push(`
+          <div class="treeNode ${qActive ? "active" : ""}" data-level="question" data-bank-id="${escapeHtml(b.id)}" data-chapter-id="${escapeHtml(
+          c.id
+        )}" data-question-id="${escapeHtml(q.id)}">
+            <div class="treeRow indent2">
+              <span class="treeDot l3"></span>
+              <input class="treeInput" data-level="question" data-question-id="${escapeHtml(q.id)}" value="${escapeHtml(q.title)}" />
+              <div class="treeMeta muted">${escapeHtml(meta)}</div>
+              <div class="treeBtns">
+                <button class="miniBtn danger del" data-action="delQuestion" title="删除题目">删</button>
+              </div>
+            </div>
+          </div>
+        `);
+      }
     }
   }
 
@@ -177,10 +169,11 @@ function renderTree() {
       const level = node.dataset.level;
       const bankId = node.dataset.bankId;
       const chapterId = node.dataset.chapterId || null;
+      const questionId = node.dataset.questionId || null;
       safeBlurSaveQuestion().finally(() => {
         state.selected.bankId = bankId || null;
         state.selected.chapterId = level === "bank" ? null : chapterId;
-        state.selected.questionId = null;
+        state.selected.questionId = level === "question" ? questionId : null;
         syncEditorFromSelectedQuestion();
         renderAll();
       });
@@ -207,6 +200,8 @@ function renderTree() {
             `/api/banks/${encodeURIComponent(inp.dataset.bankId)}/chapters/${encodeURIComponent(inp.dataset.chapterId)}`,
             { name }
           );
+        } else if (level === "question") {
+          await updateQuestionTitle(inp.dataset.questionId, name);
         }
         await reloadDb();
         renderAll();
@@ -223,10 +218,13 @@ function renderTree() {
       const action = btn.dataset.action;
       const bankId = btn.closest(".treeNode")?.dataset.bankId;
       const chapterId = btn.closest(".treeNode")?.dataset.chapterId;
+      const questionId = btn.closest(".treeNode")?.dataset.questionId;
       try {
         if (action === "addChapter") await addChapter(bankId);
+        else if (action === "addQuestion") await addQuestion(bankId, chapterId);
         else if (action === "delBank") await deleteBank(bankId);
         else if (action === "delChapter") await deleteChapter(bankId, chapterId);
+        else if (action === "delQuestion") await deleteQuestion(questionId);
       } catch (err) {
         alert(`操作失败：${err.message}`);
       }
@@ -248,7 +246,6 @@ function renderTree() {
 function renderAll() {
   renderTree();
   renderScopeHint();
-  renderQuestions();
 }
 
 async function addBank() {
@@ -296,51 +293,65 @@ async function deleteChapter(bankId, chapterId) {
   renderAll();
 }
 
-function newQuestion() {
-  if (!selectedChapter()) return alert("请先选择到具体章节。");
-  state.selected.questionId = null;
+async function addQuestion(bankId, chapterId) {
+  const bid = bankId || state.selected.bankId;
+  const cid = chapterId || state.selected.chapterId;
+  if (!bid || !cid) return alert("请先选择到具体章节。");
+  const r = await api.post(`/api/banks/${encodeURIComponent(bid)}/chapters/${encodeURIComponent(cid)}/questions`, {
+    title: "新题目",
+    content: ""
+  });
+  await reloadDb();
+  const chap = (state.db?.banks || []).find((b) => b.id === bid)?.chapters?.find((c) => c.id === cid);
+  const lastId = chap?.questions?.length ? chap.questions[chap.questions.length - 1].id : null;
+  state.selected.bankId = bid;
+  state.selected.chapterId = cid;
+  state.selected.questionId = lastId;
+  if (lastId) state.focusAfterRender = `.treeInput[data-level="question"][data-question-id="${CSS.escape(lastId)}"]`;
   syncEditorFromSelectedQuestion();
   renderAll();
-  $("qTitle").focus();
+  return r;
 }
 
-async function saveQuestionIfNeeded() {
-  const bank = selectedBank();
-  const chapter = selectedChapter();
-  if (!bank || !chapter) return;
+function newQuestion() {
+  const chap = selectedChapter();
+  if (!chap) return alert("请先选择到具体章节。");
+  addQuestion(state.selected.bankId, chap.id);
+}
 
-  const title = $("qTitle").value.trim();
+async function updateQuestionTitle(questionId, newTitle) {
+  const qid = String(questionId || "");
+  if (!qid) return;
+  // 保持内容不丢失：用当前 DB 里的内容回填
+  const q = (state.db?.banks || [])
+    .flatMap((b) => b.chapters || [])
+    .flatMap((c) => c.questions || [])
+    .find((x) => x.id === qid);
+  const content = q?.content || "";
+  await api.put(`/api/questions/${encodeURIComponent(qid)}`, { title: newTitle, content });
+}
+
+async function saveQuestionContentIfNeeded() {
+  if (!state.dirty.content) return;
+  const q = selectedQuestion();
+  if (!q) return;
   const content = $("qContent").value;
-  if (!title) {
-    $("saveMsg").textContent = "标题为空，未保存。";
-    state.dirty.title = false;
-    state.dirty.content = false;
-    return;
-  }
-
   $("saveMsg").textContent = "保存中…";
   try {
-    const qid = state.selected.questionId;
-    if (qid) {
-      await api.put(`/api/questions/${encodeURIComponent(qid)}`, { title, content });
-      $("saveMsg").textContent = "已保存。";
-    } else {
-      const r = await api.post(`/api/banks/${encodeURIComponent(bank.id)}/chapters/${encodeURIComponent(chapter.id)}/questions`, { title, content });
-      $("saveMsg").textContent = `已创建（新增 ${r.inserted || 0} 题）。`;
-    }
-    await reloadDb();
-    // 自动选中新创建/更新的题（新建时选最后一个）
-    const chap = selectedChapter();
-    if (!state.selected.questionId && chap?.questions?.length) state.selected.questionId = chap.questions[chap.questions.length - 1].id;
-    state.dirty.title = false;
+    await api.put(`/api/questions/${encodeURIComponent(q.id)}`, { title: q.title, content });
+    $("saveMsg").textContent = "已保存。";
     state.dirty.content = false;
+    await reloadDb();
+    // 保持选中
     renderAll();
+    syncEditorFromSelectedQuestion();
   } catch (e) {
     $("saveMsg").textContent = `保存失败：${e.message}`;
   }
 }
 
 async function deleteQuestion(questionId) {
+  if (!questionId) return;
   if (!confirm("确认删除该题目？")) return;
   await api.del(`/api/questions/${encodeURIComponent(questionId)}`);
   if (state.selected.questionId === questionId) state.selected.questionId = null;
@@ -373,19 +384,12 @@ function bind() {
     await deleteQuestion(state.selected.questionId);
   });
 
-  $("qTitle").addEventListener("input", () => {
-    state.dirty.title = true;
-    $("saveMsg").textContent = "未保存（失去焦点会保存）";
-  });
   $("qContent").addEventListener("input", () => {
     state.dirty.content = true;
     $("saveMsg").textContent = "未保存（失去焦点会保存）";
   });
-  $("qTitle").addEventListener("blur", () => {
-    saveQuestionIfNeeded();
-  });
   $("qContent").addEventListener("blur", () => {
-    saveQuestionIfNeeded();
+    saveQuestionContentIfNeeded();
   });
 
   $("importFile").addEventListener("change", async (e) => {

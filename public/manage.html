@@ -13,7 +13,7 @@
           <div class="logo">RA</div>
           <div class="title">
             <div class="name">题库管理</div>
-            <div class="desc">题库 / 章节 / 小节 / 题目 增删改查</div>
+            <div class="desc">题库 / 章节 / 题目：左侧目录编辑，右侧仅编辑内容</div>
           </div>
         </div>
         <div class="actions">
@@ -30,10 +30,10 @@
       <main class="layout">
         <aside class="sidebar">
           <div class="panel">
-            <div class="panelTitle">目录（两级：题库 / 章节）</div>
+            <div class="panelTitle">目录（三级：题库 / 章节 / 题目）</div>
             <div class="row">
               <button id="addBankBtn" class="btn secondary">+ 题库</button>
-              <div class="muted">左侧直接改名，失去焦点自动保存</div>
+              <div class="muted">左侧可改名，失去焦点自动保存</div>
             </div>
             <div id="tree" class="tree"></div>
           </div>
@@ -41,29 +41,20 @@
 
         <section class="content">
           <div class="panel">
-            <div class="panelTitle">题目（当前章节）</div>
+            <div class="panelTitle">题目内容（选中题目后显示）</div>
             <div class="row">
               <button id="newQuestionBtn" class="btn secondary">+ 题目</button>
               <div class="muted" id="scopeHint"></div>
               <div class="muted" id="saveMsg"></div>
             </div>
-            <div class="split">
-              <div class="listWrap">
-                <div id="questionsList" class="list"></div>
+            <div class="editor">
+              <div class="field">
+                <div class="label">答案内容（失去焦点自动保存）</div>
+                <textarea id="qContent" placeholder="先在左侧选中某个题目，然后在这里编辑答案内容"></textarea>
               </div>
-              <div class="editor">
-                <div class="field">
-                  <div class="label">题目标题（失去焦点自动保存）</div>
-                  <input id="qTitle" placeholder="例如：HashMap 与 ConcurrentHashMap 有何区别？" />
-                </div>
-                <div class="field">
-                  <div class="label">答案内容（失去焦点自动保存）</div>
-                  <textarea id="qContent" placeholder="建议结构：定义 → 原理 → 细节 → 例子 → 对比 → 场景/调优"></textarea>
-                </div>
-                <div class="row">
-                  <button id="deleteQuestionBtn" class="btn secondary">删除该题</button>
-                  <div class="muted">提示：切换题目/目录时会触发失焦保存</div>
-                </div>
+              <div class="row">
+                <button id="deleteQuestionBtn" class="btn secondary">删除该题</button>
+                <div class="muted" id="questionTitleHint">未选中题目</div>
               </div>
             </div>
           </div>
