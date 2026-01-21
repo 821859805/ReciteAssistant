@@ -3,7 +3,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   db: null,
   mode: "mixed",
-  scope: { bankId: null, chapterId: null, sectionId: null },
+  scope: { bankId: null, chapterId: null },
   queue: [],
   counts: { due: 0, new: 0, total: 0 },
   idx: 0,
@@ -58,11 +58,9 @@ function setStats() {
 function scopeLabelText() {
   const bankSel = $("bankSelect");
   const chapSel = $("chapterSelect");
-  const secSel = $("sectionSelect");
   const bank = bankSel && bankSel.value ? bankSel.options[bankSel.selectedIndex].text : "全部题库";
   const chap = chapSel && chapSel.value ? chapSel.options[chapSel.selectedIndex].text : "全部章节";
-  const sec = secSel && secSel.value ? secSel.options[secSel.selectedIndex].text : "全部小节";
-  return `${bank} / ${chap} / ${sec}`;
+  return `${bank} / ${chap}`;
 }
 
 function setCardIdle(msg) {
@@ -120,7 +118,6 @@ async function refreshDbAndSelectors() {
 
   const bankSel = $("bankSelect");
   const chapSel = $("chapterSelect");
-  const secSel = $("sectionSelect");
 
   bankSel.innerHTML = "";
   const optAllBank = document.createElement("option");
@@ -135,36 +132,24 @@ async function refreshDbAndSelectors() {
   }
 
   chapSel.innerHTML = "";
-  secSel.innerHTML = "";
   const optAllChap = document.createElement("option");
   optAllChap.value = "";
   optAllChap.textContent = "全部章节";
   chapSel.appendChild(optAllChap);
-  const optAllSec = document.createElement("option");
-  optAllSec.value = "";
-  optAllSec.textContent = "全部小节";
-  secSel.appendChild(optAllSec);
 
-  state.scope = { bankId: "", chapterId: "", sectionId: "" };
+  state.scope = { bankId: "", chapterId: "" };
   setStats();
 }
 
 function fillChapters() {
   const bankId = $("bankSelect").value;
   const chapSel = $("chapterSelect");
-  const secSel = $("sectionSelect");
   chapSel.innerHTML = "";
-  secSel.innerHTML = "";
 
   const optAllChap = document.createElement("option");
   optAllChap.value = "";
   optAllChap.textContent = "全部章节";
   chapSel.appendChild(optAllChap);
-
-  const optAllSec = document.createElement("option");
-  optAllSec.value = "";
-  optAllSec.textContent = "全部小节";
-  secSel.appendChild(optAllSec);
 
   const bank = (state.db.banks || []).find((b) => b.id === bankId);
   if (!bank) return;
@@ -176,37 +161,13 @@ function fillChapters() {
   }
 }
 
-function fillSections() {
-  const bankId = $("bankSelect").value;
-  const chapterId = $("chapterSelect").value;
-  const secSel = $("sectionSelect");
-  secSel.innerHTML = "";
-  const optAllSec = document.createElement("option");
-  optAllSec.value = "";
-  optAllSec.textContent = "全部小节";
-  secSel.appendChild(optAllSec);
-
-  const bank = (state.db.banks || []).find((b) => b.id === bankId);
-  if (!bank) return;
-  const chapter = (bank.chapters || []).find((c) => c.id === chapterId);
-  if (!chapter) return;
-  for (const s of chapter.sections || []) {
-    const opt = document.createElement("option");
-    opt.value = s.id;
-    opt.textContent = s.name;
-    secSel.appendChild(opt);
-  }
-}
-
 async function fetchQueue() {
   const bankId = $("bankSelect").value;
   const chapterId = $("chapterSelect").value;
-  const sectionId = $("sectionSelect").value;
   const limit = Math.max(5, Math.min(200, Number($("limitInput").value || 30)));
   const params = new URLSearchParams();
   if (bankId) params.set("bankId", bankId);
   if (chapterId) params.set("chapterId", chapterId);
-  if (sectionId) params.set("sectionId", sectionId);
   params.set("mode", state.mode);
   params.set("limit", String(limit));
 
@@ -258,9 +219,8 @@ async function importDbFile(file) {
 async function importQuestionsToCurrentSection() {
   const bankId = $("bankSelect").value;
   const chapterId = $("chapterSelect").value;
-  const sectionId = $("sectionSelect").value;
-  if (!bankId || !chapterId || !sectionId) {
-    $("importQuestionsMsg").textContent = "请先在左侧选择到“具体小节”，再导入。";
+  if (!bankId || !chapterId) {
+    $("importQuestionsMsg").textContent = "请先在左侧选择到“具体章节”，再导入。";
     return;
   }
   const text = $("importQuestionsText").value.trim();
@@ -276,15 +236,13 @@ async function importQuestionsToCurrentSection() {
     $("importQuestionsMsg").textContent = "需要一个 JSON 数组。";
     return;
   }
-  const r = await apiPost("/api/questions", { bankId, chapterId, sectionId, questions: arr });
+  const r = await apiPost("/api/questions", { bankId, chapterId, questions: arr });
   $("importQuestionsMsg").textContent = `导入完成：新增 ${r.inserted || 0} 题。`;
   await refreshDbAndSelectors();
   // restore selection
   $("bankSelect").value = bankId;
   fillChapters();
   $("chapterSelect").value = chapterId;
-  fillSections();
-  $("sectionSelect").value = sectionId;
 }
 
 function bindEvents() {
@@ -295,16 +253,10 @@ function bindEvents() {
 
   $("bankSelect").addEventListener("change", () => {
     fillChapters();
-    fillSections();
     setStats();
     setCardIdle();
   });
   $("chapterSelect").addEventListener("change", () => {
-    fillSections();
-    setStats();
-    setCardIdle();
-  });
-  $("sectionSelect").addEventListener("change", () => {
     setStats();
     setCardIdle();
   });

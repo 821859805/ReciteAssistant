@@ -38,7 +38,7 @@ function calcSecondsFromContent(content) {
 const state = {
   db: null,
   mode: { includeNew: true, includeForgot: true, limit: 30 },
-  scope: { bankId: "", chapterId: "", sectionId: "" },
+  scope: { bankId: "", chapterId: "" },
   queue: [],
   seconds: [],
   idx: 0,
@@ -49,21 +49,18 @@ const state = {
   timer: null
 };
 
-function getScope(db, bankId, chapterId, sectionId) {
+function getScope(db, bankId, chapterId) {
   const bank = bankId ? (db.banks || []).find((b) => b.id === bankId) : null;
   const chapter = bank && chapterId ? (bank.chapters || []).find((c) => c.id === chapterId) : null;
-  const section = chapter && sectionId ? (chapter.sections || []).find((s) => s.id === sectionId) : null;
-  return { bank, chapter, section };
+  return { bank, chapter };
 }
 
 function scopeLabelText() {
   const bankSel = $("bankSelect");
   const chapSel = $("chapterSelect");
-  const secSel = $("sectionSelect");
   const bank = bankSel && bankSel.value ? bankSel.options[bankSel.selectedIndex].text : "全部题库";
   const chap = chapSel && chapSel.value ? chapSel.options[chapSel.selectedIndex].text : "全部章节";
-  const sec = secSel && secSel.value ? secSel.options[secSel.selectedIndex].text : "全部小节";
-  return `${bank} / ${chap} / ${sec}`;
+  return `${bank} / ${chap}`;
 }
 
 function setStats(counts) {
@@ -92,22 +89,10 @@ function fillSelect(selectEl, items, allLabel) {
 function fillChapters() {
   const bankId = $("bankSelect").value;
   const chapSel = $("chapterSelect");
-  const secSel = $("sectionSelect");
   fillSelect(chapSel, [], "全部章节");
-  fillSelect(secSel, [], "全部小节");
   const bank = (state.db.banks || []).find((b) => b.id === bankId);
   if (!bank) return;
   fillSelect(chapSel, bank.chapters || [], "全部章节");
-}
-
-function fillSections() {
-  const bankId = $("bankSelect").value;
-  const chapterId = $("chapterSelect").value;
-  const secSel = $("sectionSelect");
-  fillSelect(secSel, [], "全部小节");
-  const scope = getScope(state.db, bankId, chapterId, "");
-  if (!scope.chapter) return;
-  fillSelect(secSel, scope.chapter.sections || [], "全部小节");
 }
 
 function stopTimer() {
@@ -226,14 +211,12 @@ async function refreshDbAndSelectors() {
   state.db = await apiGet("/api/db");
   fillSelect($("bankSelect"), state.db.banks || [], "全部题库");
   fillSelect($("chapterSelect"), [], "全部章节");
-  fillSelect($("sectionSelect"), [], "全部小节");
   setStats({ new: 0, forgot: 0, total: 0 });
 }
 
 async function fetchLearnQueue() {
   const bankId = $("bankSelect").value;
   const chapterId = $("chapterSelect").value;
-  const sectionId = $("sectionSelect").value;
   const limit = Math.max(5, Math.min(500, Number($("limitInput").value || 30)));
   const includeNew = $("includeNew").checked;
   const includeForgot = $("includeForgot").checked;
@@ -241,7 +224,6 @@ async function fetchLearnQueue() {
   const params = new URLSearchParams();
   if (bankId) params.set("bankId", bankId);
   if (chapterId) params.set("chapterId", chapterId);
-  if (sectionId) params.set("sectionId", sectionId);
   params.set("limit", String(limit));
   params.set("includeNew", includeNew ? "1" : "0");
   params.set("includeForgot", includeForgot ? "1" : "0");
@@ -291,16 +273,10 @@ function stopSession() {
 function bindEvents() {
   $("bankSelect").addEventListener("change", () => {
     fillChapters();
-    fillSections();
     renderIdle();
     setStats({ new: 0, forgot: 0, total: 0 });
   });
   $("chapterSelect").addEventListener("change", () => {
-    fillSections();
-    renderIdle();
-    setStats({ new: 0, forgot: 0, total: 0 });
-  });
-  $("sectionSelect").addEventListener("change", () => {
     renderIdle();
     setStats({ new: 0, forgot: 0, total: 0 });
   });

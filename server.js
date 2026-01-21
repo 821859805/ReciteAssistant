@@ -25,7 +25,14 @@ function ensureDataFile() {
 function readDb() {
   ensureDataFile();
   const raw = fs.readFileSync(DB_PATH, "utf8");
-  return JSON.parse(raw);
+  const db = JSON.parse(raw);
+  const normalized = normalizeDb(db);
+  // 如果发生结构迁移，落盘一次，保证后续直接使用新结构
+  if (normalized.__changed) {
+    delete normalized.__changed;
+    writeDb(normalized);
+  }
+  return normalized;
 }
 
 function writeDb(db) {
@@ -36,6 +43,61 @@ function writeDb(db) {
   fs.renameSync(tmp, DB_PATH);
 }
 
+function normalizeDb(db) {
+  // 目标结构：bank -> chapters -> questions
+  // 兼容旧结构：chapter.sections[].questions[]，迁移后写回 chapter.questions[]
+  if (!db || typeof db !== "object") return { version: 1, banks: [], updatedAt: nowIso() };
+  if (!Array.isArray(db.banks)) db.banks = [];
+  let changed = false;
+
+  for (const b of db.banks) {
+    if (!b || typeof b !== "object") continue;
+    if (!Array.isArray(b.chapters)) b.chapters = [];
+    for (const c of b.chapters) {
+      if (!c || typeof c !== "object") continue;
+      if (!Array.isArray(c.questions)) c.questions = [];
+
+      // 迁移旧 sections
+      if (Array.isArray(c.sections) && c.sections.length) {
+        const totalSections = c.sections.length;
+        for (const s of c.sections) {
+          if (!s || typeof s !== "object") continue;
+          const secName = s.name ? String(s.name).trim() : "";
+          for (const q of s.questions || []) {
+            if (!q || typeof q !== "object") continue;
+            // 保留来源：如果有多个小节，给标题加前缀
+            if (secName && totalSections > 1 && q.title && !String(q.title).startsWith(`[${secName}]`)) {
+              q.title = `[${secName}] ${String(q.title)}`;
+            }
+            initSrsIfMissing(q);
+            c.questions.push(q);
+          }
+        }
+        delete c.sections;
+        changed = true;
+      }
+
+      // 去重（避免重复迁移）
+      const seen = new Set();
+      const uniq = [];
+      for (const q of c.questions) {
+        if (!q || !q.id) continue;
+        if (seen.has(q.id)) {
+          changed = true;
+          continue;
+        }
+        seen.add(q.id);
+        initSrsIfMissing(q);
+        uniq.push(q);
+      }
+      if (uniq.length !== c.questions.length) c.questions = uniq;
+    }
+  }
+
+  if (changed) db.__changed = true;
+  return db;
+}
+
 function uuid() {
   return crypto.randomUUID();
 }
@@ -43,38 +105,30 @@ function uuid() {
 function getScope(db, { bankId, chapterId, sectionId }) {
   const bank = bankId ? db.banks.find((b) => b.id === bankId) : null;
   const chapter = bank && chapterId ? bank.chapters.find((c) => c.id === chapterId) : null;
-  const section = chapter && sectionId ? chapter.sections.find((s) => s.id === sectionId) : null;
-
-  return { bank, chapter, section };
+  // sectionId 已废弃（降层级到章节）
+  return { bank, chapter, section: null };
 }
 
 function walkQuestions(db, scope) {
   const questions = [];
-  const pushFromSection = (sec) => {
-    for (const q of sec.questions || []) questions.push(q);
+  const pushFromChapter = (chap) => {
+    for (const q of chap.questions || []) questions.push(q);
   };
 
-  if (scope.section) {
-    pushFromSection(scope.section);
-    return questions;
-  }
-
   if (scope.chapter) {
-    for (const sec of scope.chapter.sections || []) pushFromSection(sec);
+    pushFromChapter(scope.chapter);
     return questions;
   }
 
   if (scope.bank) {
-    for (const chap of scope.bank.chapters || []) {
-      for (const sec of chap.sections || []) pushFromSection(sec);
-    }
+    for (const chap of scope.bank.chapters || []) pushFromChapter(chap);
     return questions;
   }
 
   // all
   for (const b of db.banks || []) {
     for (const c of b.chapters || []) {
-      for (const s of c.sections || []) pushFromSection(s);
+      pushFromChapter(c);
     }
   }
   return questions;
@@ -144,11 +198,7 @@ function sm2Update(srs, quality) {
 function findQuestionById(db, questionId) {
   for (const b of db.banks || []) {
     for (const c of b.chapters || []) {
-      for (const s of c.sections || []) {
-        for (const q of s.questions || []) {
-          if (q.id === questionId) return q;
-        }
-      }
+      for (const q of c.questions || []) if (q.id === questionId) return q;
     }
   }
   return null;
@@ -157,10 +207,8 @@ function findQuestionById(db, questionId) {
 function findQuestionContext(db, questionId) {
   for (const b of db.banks || []) {
     for (const c of b.chapters || []) {
-      for (const s of c.sections || []) {
-        const idx = (s.questions || []).findIndex((q) => q.id === questionId);
-        if (idx >= 0) return { bank: b, chapter: c, section: s, index: idx, question: s.questions[idx] };
-      }
+      const idx = (c.questions || []).findIndex((q) => q.id === questionId);
+      if (idx >= 0) return { bank: b, chapter: c, index: idx, question: c.questions[idx] };
     }
   }
   return null;
@@ -193,11 +241,12 @@ app.post("/api/import", (req, res) => {
   const body = req.body;
   const db = body && body.version && body.banks ? body : body && body.db ? body.db : null;
   if (!db || !Array.isArray(db.banks)) return res.status(400).json({ error: "invalid_db" });
-  db.version = 1;
-  db.updatedAt = nowIso();
+  const normalized = normalizeDb(db);
+  normalized.version = 1;
+  normalized.updatedAt = nowIso();
   // ensure srs exists
-  for (const q of walkQuestions(db, {})) initSrsIfMissing(q);
-  writeDb(db);
+  for (const q of walkQuestions(normalized, {})) initSrsIfMissing(q);
+  writeDb(normalized);
   res.json({ ok: true });
 });
 
@@ -239,7 +288,7 @@ app.post("/api/chapters", (req, res) => {
   const db = readDb();
   const bank = db.banks.find((b) => b.id === bankId);
   if (!bank) return res.status(404).json({ error: "bank_not_found" });
-  const chapter = { id: uuid(), name: String(name).trim(), createdAt: nowIso(), sections: [] };
+  const chapter = { id: uuid(), name: String(name).trim(), createdAt: nowIso(), questions: [] };
   bank.chapters.push(chapter);
   writeDb(db);
   res.json(chapter);
@@ -273,75 +322,37 @@ app.delete("/api/banks/:bankId/chapters/:chapterId", (req, res) => {
   res.json({ ok: true });
 });
 
+// sections 已废弃（保留一个返回 410 的占位接口，避免旧页面误调用时静默失败）
 app.post("/api/sections", (req, res) => {
-  const { bankId, chapterId, name } = req.body || {};
-  if (!bankId || !chapterId || !name) return res.status(400).json({ error: "invalid_params" });
-  const db = readDb();
-  const bank = db.banks.find((b) => b.id === bankId);
-  if (!bank) return res.status(404).json({ error: "bank_not_found" });
-  const chapter = bank.chapters.find((c) => c.id === chapterId);
-  if (!chapter) return res.status(404).json({ error: "chapter_not_found" });
-  const section = { id: uuid(), name: String(name).trim(), createdAt: nowIso(), questions: [] };
-  chapter.sections.push(section);
-  writeDb(db);
-  res.json(section);
+  res.status(410).json({ error: "sections_deprecated" });
 });
 
 app.put("/api/banks/:bankId/chapters/:chapterId/sections/:sectionId", (req, res) => {
-  const bankId = String(req.params.bankId);
-  const chapterId = String(req.params.chapterId);
-  const sectionId = String(req.params.sectionId);
-  const { name } = req.body || {};
-  if (!name) return res.status(400).json({ error: "invalid_name" });
-  const db = readDb();
-  const scope = getScope(db, { bankId, chapterId, sectionId });
-  if (!scope.bank) return res.status(404).json({ error: "bank_not_found" });
-  if (!scope.chapter) return res.status(404).json({ error: "chapter_not_found" });
-  if (!scope.section) return res.status(404).json({ error: "section_not_found" });
-  scope.section.name = String(name).trim();
-  writeDb(db);
-  res.json(scope.section);
+  res.status(410).json({ error: "sections_deprecated" });
 });
 
 app.delete("/api/banks/:bankId/chapters/:chapterId/sections/:sectionId", (req, res) => {
-  const bankId = String(req.params.bankId);
-  const chapterId = String(req.params.chapterId);
-  const sectionId = String(req.params.sectionId);
-  const db = readDb();
-  const bank = db.banks.find((b) => b.id === bankId);
-  if (!bank) return res.status(404).json({ error: "bank_not_found" });
-  const chapter = bank.chapters.find((c) => c.id === chapterId);
-  if (!chapter) return res.status(404).json({ error: "chapter_not_found" });
-  const idx = chapter.sections.findIndex((s) => s.id === sectionId);
-  if (idx < 0) return res.status(404).json({ error: "section_not_found" });
-  chapter.sections.splice(idx, 1);
-  writeDb(db);
-  res.json({ ok: true });
+  res.status(410).json({ error: "sections_deprecated" });
 });
 
 app.post("/api/questions", (req, res) => {
-  const { bankId, chapterId, sectionId, questions } = req.body || {};
-  if (!bankId || !chapterId || !sectionId) return res.status(400).json({ error: "invalid_scope" });
+  // 兼容旧客户端：如果带 sectionId，直接忽略并改为写入 chapter.questions
+  const { bankId, chapterId, questions } = req.body || {};
+  if (!bankId || !chapterId) return res.status(400).json({ error: "invalid_scope" });
   if (!Array.isArray(questions) || questions.length === 0) return res.status(400).json({ error: "invalid_questions" });
 
   const db = readDb();
-  const scope = getScope(db, { bankId, chapterId, sectionId });
-  if (!scope.section) return res.status(404).json({ error: "section_not_found" });
+  const scope = getScope(db, { bankId, chapterId });
+  if (!scope.chapter) return res.status(404).json({ error: "chapter_not_found" });
 
   const inserted = [];
   for (const item of questions) {
     const title = item && item.title ? String(item.title).trim() : "";
     const content = item && item.content ? String(item.content) : "";
     if (!title) continue;
-    const q = {
-      id: uuid(),
-      title,
-      content,
-      createdAt: nowIso(),
-      updatedAt: nowIso()
-    };
+    const q = { id: uuid(), title, content, createdAt: nowIso(), updatedAt: nowIso() };
     initSrsIfMissing(q);
-    scope.section.questions.push(q);
+    scope.chapter.questions.push(q);
     inserted.push(q);
   }
 
@@ -349,15 +360,14 @@ app.post("/api/questions", (req, res) => {
   res.json({ ok: true, inserted: inserted.length });
 });
 
-app.post("/api/banks/:bankId/chapters/:chapterId/sections/:sectionId/questions", (req, res) => {
+app.post("/api/banks/:bankId/chapters/:chapterId/questions", (req, res) => {
   const bankId = String(req.params.bankId);
   const chapterId = String(req.params.chapterId);
-  const sectionId = String(req.params.sectionId);
   const body = req.body || {};
   const items = Array.isArray(body.questions) ? body.questions : [body];
   const db = readDb();
-  const scope = getScope(db, { bankId, chapterId, sectionId });
-  if (!scope.section) return res.status(404).json({ error: "section_not_found" });
+  const scope = getScope(db, { bankId, chapterId });
+  if (!scope.chapter) return res.status(404).json({ error: "chapter_not_found" });
 
   const inserted = [];
   for (const item of items) {
@@ -366,11 +376,16 @@ app.post("/api/banks/:bankId/chapters/:chapterId/sections/:sectionId/questions",
     if (!title) continue;
     const q = { id: uuid(), title, content, createdAt: nowIso(), updatedAt: nowIso() };
     initSrsIfMissing(q);
-    scope.section.questions.push(q);
+    scope.chapter.questions.push(q);
     inserted.push(q);
   }
   writeDb(db);
   res.json({ ok: true, inserted: inserted.length });
+});
+
+// 旧路径兼容：仍然接受，但提示废弃并写入章节
+app.post("/api/banks/:bankId/chapters/:chapterId/sections/:sectionId/questions", (req, res) => {
+  res.status(410).json({ error: "sections_deprecated_use_chapter_questions" });
 });
 
 app.put("/api/questions/:questionId", (req, res) => {
@@ -402,11 +417,10 @@ app.get("/api/queue", (req, res) => {
   const db = readDb();
   const bankId = req.query.bankId ? String(req.query.bankId) : null;
   const chapterId = req.query.chapterId ? String(req.query.chapterId) : null;
-  const sectionId = req.query.sectionId ? String(req.query.sectionId) : null;
   const mode = req.query.mode ? String(req.query.mode) : "mixed"; // due | new | mixed
   const limit = req.query.limit ? Math.max(1, Math.min(200, Number(req.query.limit))) : 30;
 
-  const scope = getScope(db, { bankId, chapterId, sectionId });
+  const scope = getScope(db, { bankId, chapterId });
   const all = walkQuestions(db, scope);
   const now = Date.now();
 
@@ -459,12 +473,11 @@ app.get("/api/queue/learn", (req, res) => {
   const db = readDb();
   const bankId = req.query.bankId ? String(req.query.bankId) : null;
   const chapterId = req.query.chapterId ? String(req.query.chapterId) : null;
-  const sectionId = req.query.sectionId ? String(req.query.sectionId) : null;
   const limit = req.query.limit ? Math.max(1, Math.min(500, Number(req.query.limit))) : 50;
   const includeNew = req.query.includeNew == null ? true : String(req.query.includeNew) !== "0";
   const includeForgot = req.query.includeForgot == null ? true : String(req.query.includeForgot) !== "0";
 
-  const scope = getScope(db, { bankId, chapterId, sectionId });
+  const scope = getScope(db, { bankId, chapterId });
   const all = walkQuestions(db, scope);
   for (const q of all) initSrsIfMissing(q);
 

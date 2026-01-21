@@ -30,7 +30,7 @@
       <main class="layout">
         <aside class="sidebar">
           <div class="panel">
-            <div class="panelTitle">学习范围</div>
+            <div class="panelTitle">学习范围（题库 / 章节）</div>
             <div class="field">
               <div class="label">题库</div>
               <select id="bankSelect"></select>
@@ -38,10 +38,6 @@
             <div class="field">
               <div class="label">章节</div>
               <select id="chapterSelect"></select>
-            </div>
-            <div class="field">
-              <div class="label">小节</div>
-              <select id="sectionSelect"></select>
             </div>
           </div>
 
@@ -108,10 +104,10 @@
           </div>
 
           <div class="panel" id="quickAddPanel">
-            <div class="panelTitle">快速导入（当前小节）</div>
+            <div class="panelTitle">快速导入（当前章节）</div>
             <div class="muted">粘贴 JSON 数组：<code>[{"title":"题目","content":"内容"}, ...]</code></div>
             <textarea id="importQuestionsText" placeholder='[{"title":"...","content":"..."}]'></textarea>
-            <button id="importQuestionsBtn" class="btn secondary">导入到当前小节</button>
+            <button id="importQuestionsBtn" class="btn secondary">导入到当前章节</button>
             <div id="importQuestionsMsg" class="muted"></div>
           </div>
         </section>

@@ -11,28 +11,22 @@
           "id": "demo-java-jvm",
           "name": "JVM",
           "createdAt": "2026-01-21T00:00:00.000Z",
-          "sections": [
+          "questions": [
             {
-              "id": "demo-java-jvm-gc",
-              "name": "GC",
+              "id": "demo-q1",
+              "title": "说说 JVM 垃圾回收的整体流程？",
+              "content": "从**可达性分析**开始，确定存活对象；再根据分代策略对新生代/老年代分别执行相应算法（复制/标记-清除/标记-整理）。\n\n- 触发：Minor GC / Major GC / Full GC\n- 常见收集器：Serial/ParNew/CMS/G1/ZGC/Shenandoah\n- 关键目标：暂停时间（STW）、吞吐、内存占用\n\n复习时建议用“**触发条件 → 回收对象范围 → 算法/收集器 → 代价(STW/吞吐) → 调优手段**”的结构回答。",
               "createdAt": "2026-01-21T00:00:00.000Z",
-              "questions": [
-                {
-                  "id": "demo-q1",
-                  "title": "说说 JVM 垃圾回收的整体流程？",
-                  "content": "从**可达性分析**开始，确定存活对象；再根据分代策略对新生代/老年代分别执行相应算法（复制/标记-清除/标记-整理）。\n\n- 触发：Minor GC / Major GC / Full GC\n- 常见收集器：Serial/ParNew/CMS/G1/ZGC/Shenandoah\n- 关键目标：暂停时间（STW）、吞吐、内存占用\n\n复习时建议用“**触发条件 → 回收对象范围 → 算法/收集器 → 代价(STW/吞吐) → 调优手段**”的结构回答。",
-                  "createdAt": "2026-01-21T00:00:00.000Z",
-                  "updatedAt": "2026-01-21T00:00:00.000Z",
-                  "srs": {
-                    "ease": 2.5,
-                    "intervalDays": 0,
-                    "repetitions": 0,
-                    "dueAt": "2026-01-21T00:00:00.000Z",
-                    "lastReviewedAt": null,
-                    "lapses": 0
-                  }
-                }
-              ]
+              "updatedAt": "2026-01-21T00:00:00.000Z",
+              "srs": {
+                "ease": 2.5,
+                "intervalDays": 0,
+                "repetitions": 0,
+                "dueAt": "2026-01-21T00:00:00.000Z",
+                "lastReviewedAt": null,
+                "lapses": 0,
+                "lastQuality": null
+              }
             }
           ]
         }

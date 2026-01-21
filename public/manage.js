@@ -25,7 +25,7 @@ const api = {
 
 const state = {
   db: null,
-  selected: { bankId: null, chapterId: null, sectionId: null, questionId: null },
+  selected: { bankId: null, chapterId: null, questionId: null },
   focusAfterRender: null,
   dirty: { title: false, content: false }
 };
@@ -46,20 +46,15 @@ function selectedChapter() {
   const b = selectedBank();
   return b ? (b.chapters || []).find((c) => c.id === state.selected.chapterId) || null : null;
 }
-function selectedSection() {
-  const c = selectedChapter();
-  return c ? (c.sections || []).find((s) => s.id === state.selected.sectionId) || null : null;
-}
 function selectedQuestion() {
-  const s = selectedSection();
-  return s ? (s.questions || []).find((q) => q.id === state.selected.questionId) || null : null;
+  const c = selectedChapter();
+  return c ? (c.questions || []).find((q) => q.id === state.selected.questionId) || null : null;
 }
 
 function currentScopeText() {
   const b = selectedBank();
   const c = selectedChapter();
-  const s = selectedSection();
-  const parts = [b ? b.name : "未选题库", c ? c.name : "未选章节", s ? s.name : "未选小节"];
+  const parts = [b ? b.name : "未选题库", c ? c.name : "未选章节"];
   return parts.join(" / ");
 }
 
@@ -74,9 +69,9 @@ async function safeBlurSaveQuestion() {
 }
 
 function renderQuestions() {
-  const sec = selectedSection();
+  const chap = selectedChapter();
   const list = $("questionsList");
-  const items = sec?.questions || [];
+  const items = chap?.questions || [];
   const selectedId = state.selected.questionId;
   if (items.length === 0) {
     list.innerHTML = `<div class="muted">暂无题目</div>`;
@@ -164,31 +159,11 @@ function renderTree() {
         c.name
       )}" />
             <div class="treeBtns">
-              <button class="miniBtn add" data-action="addSection" title="新增小节">+节</button>
               <button class="miniBtn danger del" data-action="delChapter" title="删除章节">删</button>
             </div>
           </div>
         </div>
       `);
-
-      for (const s of c.sections || []) {
-        const secActive = chapActive && state.selected.sectionId === s.id;
-        html.push(`
-          <div class="treeNode ${secActive ? "active" : ""}" data-level="section" data-bank-id="${escapeHtml(b.id)}" data-chapter-id="${escapeHtml(
-          c.id
-        )}" data-section-id="${escapeHtml(s.id)}">
-            <div class="treeRow indent2">
-              <span class="treeDot l3"></span>
-              <input class="treeInput" data-level="section" data-bank-id="${escapeHtml(b.id)}" data-chapter-id="${escapeHtml(
-          c.id
-        )}" data-section-id="${escapeHtml(s.id)}" value="${escapeHtml(s.name)}" />
-              <div class="treeBtns">
-                <button class="miniBtn danger del" data-action="delSection" title="删除小节">删</button>
-              </div>
-            </div>
-          </div>
-        `);
-      }
     }
   }
 
@@ -202,11 +177,9 @@ function renderTree() {
       const level = node.dataset.level;
       const bankId = node.dataset.bankId;
       const chapterId = node.dataset.chapterId || null;
-      const sectionId = node.dataset.sectionId || null;
       safeBlurSaveQuestion().finally(() => {
         state.selected.bankId = bankId || null;
         state.selected.chapterId = level === "bank" ? null : chapterId;
-        state.selected.sectionId = level === "section" ? sectionId : null;
         state.selected.questionId = null;
         syncEditorFromSelectedQuestion();
         renderAll();
@@ -234,13 +207,6 @@ function renderTree() {
             `/api/banks/${encodeURIComponent(inp.dataset.bankId)}/chapters/${encodeURIComponent(inp.dataset.chapterId)}`,
             { name }
           );
-        } else if (level === "section") {
-          await api.put(
-            `/api/banks/${encodeURIComponent(inp.dataset.bankId)}/chapters/${encodeURIComponent(inp.dataset.chapterId)}/sections/${encodeURIComponent(
-              inp.dataset.sectionId
-            )}`,
-            { name }
-          );
         }
         await reloadDb();
         renderAll();
@@ -257,13 +223,10 @@ function renderTree() {
       const action = btn.dataset.action;
       const bankId = btn.closest(".treeNode")?.dataset.bankId;
       const chapterId = btn.closest(".treeNode")?.dataset.chapterId;
-      const sectionId = btn.closest(".treeNode")?.dataset.sectionId;
       try {
         if (action === "addChapter") await addChapter(bankId);
-        else if (action === "addSection") await addSection(bankId, chapterId);
         else if (action === "delBank") await deleteBank(bankId);
         else if (action === "delChapter") await deleteChapter(bankId, chapterId);
-        else if (action === "delSection") await deleteSection(bankId, chapterId, sectionId);
       } catch (err) {
         alert(`操作失败：${err.message}`);
       }
@@ -293,7 +256,6 @@ async function addBank() {
   await reloadDb();
   state.selected.bankId = b.id;
   state.selected.chapterId = null;
-  state.selected.sectionId = null;
   state.selected.questionId = null;
   state.focusAfterRender = `.treeInput[data-level="bank"][data-bank-id="${CSS.escape(b.id)}"]`;
   syncEditorFromSelectedQuestion();
@@ -307,65 +269,35 @@ async function addChapter(bankId) {
   await reloadDb();
   state.selected.bankId = bid;
   state.selected.chapterId = c.id;
-  state.selected.sectionId = null;
   state.selected.questionId = null;
   state.focusAfterRender = `.treeInput[data-level="chapter"][data-bank-id="${CSS.escape(bid)}"][data-chapter-id="${CSS.escape(c.id)}"]`;
   syncEditorFromSelectedQuestion();
   renderAll();
 }
 
-async function addSection(bankId, chapterId) {
-  const bid = bankId || state.selected.bankId;
-  const cid = chapterId || state.selected.chapterId;
-  if (!bid || !cid) return alert("请先选择题库和章节。");
-  const s = await api.post("/api/sections", { bankId: bid, chapterId: cid, name: "新小节" });
-  await reloadDb();
-  state.selected.bankId = bid;
-  state.selected.chapterId = cid;
-  state.selected.sectionId = s.id;
-  state.selected.questionId = null;
-  state.focusAfterRender = `.treeInput[data-level="section"][data-bank-id="${CSS.escape(bid)}"][data-chapter-id="${CSS.escape(cid)}"][data-section-id="${CSS.escape(
-    s.id
-  )}"]`;
-  syncEditorFromSelectedQuestion();
-  renderAll();
-}
-
 async function deleteBank(bankId) {
   if (!bankId) return;
-  if (!confirm("删除题库将删除其下全部章节/小节/题目，确认？")) return;
+  if (!confirm("删除题库将删除其下全部章节/题目，确认？")) return;
   await api.del(`/api/banks/${encodeURIComponent(bankId)}`);
   await reloadDb();
-  if (state.selected.bankId === bankId) state.selected = { bankId: null, chapterId: null, sectionId: null, questionId: null };
+  if (state.selected.bankId === bankId) state.selected = { bankId: null, chapterId: null, questionId: null };
   syncEditorFromSelectedQuestion();
   renderAll();
 }
 
 async function deleteChapter(bankId, chapterId) {
   if (!bankId || !chapterId) return;
-  if (!confirm("删除章节将删除其下全部小节/题目，确认？")) return;
+  if (!confirm("删除章节将删除其下全部题目，确认？")) return;
   await api.del(`/api/banks/${encodeURIComponent(bankId)}/chapters/${encodeURIComponent(chapterId)}`);
   await reloadDb();
   if (state.selected.chapterId === chapterId) state.selected.chapterId = null;
-  if (state.selected.sectionId) state.selected.sectionId = null;
-  state.selected.questionId = null;
-  syncEditorFromSelectedQuestion();
-  renderAll();
-}
-
-async function deleteSection(bankId, chapterId, sectionId) {
-  if (!bankId || !chapterId || !sectionId) return;
-  if (!confirm("删除小节将删除其下全部题目，确认？")) return;
-  await api.del(`/api/banks/${encodeURIComponent(bankId)}/chapters/${encodeURIComponent(chapterId)}/sections/${encodeURIComponent(sectionId)}`);
-  await reloadDb();
-  if (state.selected.sectionId === sectionId) state.selected.sectionId = null;
   state.selected.questionId = null;
   syncEditorFromSelectedQuestion();
   renderAll();
 }
 
 function newQuestion() {
-  if (!selectedSection()) return alert("请先选择到具体小节。");
+  if (!selectedChapter()) return alert("请先选择到具体章节。");
   state.selected.questionId = null;
   syncEditorFromSelectedQuestion();
   renderAll();
@@ -375,8 +307,7 @@ function newQuestion() {
 async function saveQuestionIfNeeded() {
   const bank = selectedBank();
   const chapter = selectedChapter();
-  const section = selectedSection();
-  if (!bank || !chapter || !section) return;
+  if (!bank || !chapter) return;
 
   const title = $("qTitle").value.trim();
   const content = $("qContent").value;
@@ -394,16 +325,13 @@ async function saveQuestionIfNeeded() {
       await api.put(`/api/questions/${encodeURIComponent(qid)}`, { title, content });
       $("saveMsg").textContent = "已保存。";
     } else {
-      const r = await api.post(
-        `/api/banks/${encodeURIComponent(bank.id)}/chapters/${encodeURIComponent(chapter.id)}/sections/${encodeURIComponent(section.id)}/questions`,
-        { title, content }
-      );
+      const r = await api.post(`/api/banks/${encodeURIComponent(bank.id)}/chapters/${encodeURIComponent(chapter.id)}/questions`, { title, content });
       $("saveMsg").textContent = `已创建（新增 ${r.inserted || 0} 题）。`;
     }
     await reloadDb();
     // 自动选中新创建/更新的题（新建时选最后一个）
-    const sec = selectedSection();
-    if (!state.selected.questionId && sec?.questions?.length) state.selected.questionId = sec.questions[sec.questions.length - 1].id;
+    const chap = selectedChapter();
+    if (!state.selected.questionId && chap?.questions?.length) state.selected.questionId = chap.questions[chap.questions.length - 1].id;
     state.dirty.title = false;
     state.dirty.content = false;
     renderAll();
@@ -432,7 +360,7 @@ async function importDbFile(file) {
   }
   await api.post("/api/import", json);
   await reloadDb();
-  state.selected = { bankId: null, chapterId: null, sectionId: null, questionId: null };
+  state.selected = { bankId: null, chapterId: null, questionId: null };
   syncEditorFromSelectedQuestion();
   renderAll();
 }
