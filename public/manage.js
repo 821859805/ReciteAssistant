@@ -419,6 +419,95 @@ function bind() {
     const previewEl = $("qPreview");
     if (previewEl && window.renderMarkdown) previewEl.innerHTML = window.renderMarkdown($("qContent").value);
   });
+  $("qContent").addEventListener("keydown", (e) => {
+    // Markdown shortcuts (Ctrl/⌘)
+    const isCmd = e.metaKey || e.ctrlKey;
+    if (!isCmd) return;
+    const key = e.key;
+    const el = e.target;
+    if (!(el && typeof el.selectionStart === "number")) return;
+
+    const withShift = e.shiftKey;
+    const lower = String(key).toLowerCase();
+
+    const applyWrap = (prefix, suffix, placeholder) => {
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const value = el.value;
+      const selected = value.slice(start, end) || placeholder || "";
+      const next = value.slice(0, start) + prefix + selected + suffix + value.slice(end);
+      el.value = next;
+      const cursorStart = start + prefix.length;
+      const cursorEnd = cursorStart + selected.length;
+      el.setSelectionRange(cursorStart, cursorEnd);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    const applyLinePrefix = (linePrefix) => {
+      const value = el.value;
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+      const lineEnd = value.indexOf("\n", end);
+      const endPos = lineEnd === -1 ? value.length : lineEnd;
+      const block = value.slice(lineStart, endPos);
+      const lines = block.split("\n").map((l) => (l.trim() ? linePrefix + l : l));
+      const replaced = lines.join("\n");
+      el.value = value.slice(0, lineStart) + replaced + value.slice(endPos);
+      el.setSelectionRange(lineStart, lineStart + replaced.length);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    // Ctrl/⌘+B bold
+    if (!withShift && lower === "b") {
+      e.preventDefault();
+      applyWrap("**", "**", "加粗");
+      return;
+    }
+    // Ctrl/⌘+I italic
+    if (!withShift && lower === "i") {
+      e.preventDefault();
+      applyWrap("*", "*", "斜体");
+      return;
+    }
+    // Ctrl/⌘+K link
+    if (!withShift && lower === "k") {
+      e.preventDefault();
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const value = el.value;
+      const selected = value.slice(start, end) || "链接文本";
+      const insert = `[${selected}](https://example.com)`;
+      el.value = value.slice(0, start) + insert + value.slice(end);
+      el.setSelectionRange(start + 1, start + 1 + selected.length);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      return;
+    }
+    // Ctrl/⌘+` inline code
+    if (!withShift && key === "`") {
+      e.preventDefault();
+      applyWrap("`", "`", "code");
+      return;
+    }
+    // Ctrl/⌘+Shift+L list
+    if (withShift && lower === "l") {
+      e.preventDefault();
+      applyLinePrefix("- ");
+      return;
+    }
+    // Ctrl/⌘+Shift+Q quote
+    if (withShift && lower === "q") {
+      e.preventDefault();
+      applyLinePrefix("> ");
+      return;
+    }
+    // Ctrl/⌘+Shift+C code block
+    if (withShift && lower === "c") {
+      e.preventDefault();
+      applyWrap("\n```txt\n", "\n```\n", "代码");
+      return;
+    }
+  });
   $("qContent").addEventListener("blur", () => {
     saveQuestionContentIfNeeded();
   });
