@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReciteAssistant - 题库管理</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/vendor/hljs-styles/github.min.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo">RA</div>
+          <div class="title">
+            <div class="name">题库管理</div>
+            <div class="desc">题库 / 章节 / 题目：左侧目录编辑，右侧仅编辑内容</div>
+          </div>
+        </div>
+        <div class="actions">
+          <a class="btn secondary" href="/">学习页</a>
+          <a class="btn secondary" href="/learn-new.html">新题/遗忘题学习</a>
+          <label class="btn secondary">
+            导入题库(JSON)
+            <input id="importFile" type="file" accept="application/json" hidden />
+          </label>
+          <a class="btn secondary" href="/api/export">导出题库</a>
+        </div>
+      </header>
+
+      <main class="layout full">
+        <aside class="sidebar">
+          <div class="panel">
+            <div class="panelTitle">目录（三级：题库 / 章节 / 题目）</div>
+            <div class="row">
+              <button id="addBankBtn" class="btn secondary">+ 题库</button>
+              <div class="muted">左侧可改名，失去焦点自动保存</div>
+            </div>
+            <div id="tree" class="tree"></div>
+          </div>
+        </aside>
+
+        <section class="content">
+          <div class="panel">
+            <div class="panelTitle">题目内容（选中题目后显示）</div>
+            <div class="row">
+              <button id="newQuestionBtn" class="btn secondary">+ 题目</button>
+              <div class="muted" id="scopeHint"></div>
+              <div class="muted" id="saveMsg"></div>
+            </div>
+            <div class="editor">
+              <div class="field">
+                <div class="label">答案（Markdown 编辑区 ⇋ 渲染预览区）</div>
+                <div class="muted">
+                  快捷键：<b>Ctrl/⌘+B</b> 粗体，<b>Ctrl/⌘+I</b> 斜体，<b>Ctrl/⌘+K</b> 链接，<b>Ctrl/⌘+`</b> 行内代码，
+                  <b>Ctrl/⌘+Shift+L</b> 列表，<b>Ctrl/⌘+Shift+Q</b> 引用，<b>Ctrl/⌘+Shift+C</b> 代码块
+                </div>
+                <div class="mdSplit">
+                  <div class="mdPane">
+                    <div class="mdPaneTitle">渲染前（可编辑）</div>
+                    <textarea id="qContent" class="mdEditor" placeholder="先在左侧选中某个题目，然后在这里用 Markdown 编辑答案内容"></textarea>
+                  </div>
+                  <div class="mdPane">
+                    <div class="mdPaneTitle">渲染后（不可编辑，用户看到的就是这里）</div>
+                    <div id="qPreview" class="mdPreview">未选中题目</div>
+                  </div>
+                </div>
+              </div>
+              <div class="row">
+                <button id="deleteQuestionBtn" class="btn secondary">删除该题</button>
+                <div class="muted" id="questionTitleHint">未选中题目</div>
+              <div class="muted" id="charCountHint">字数：-</div>
+              </div>
+              <div class="panel subtle" style="margin-top: 12px">
+                <div class="panelTitle">记忆状态（管理）</div>
+                <div class="row">
+                  <label class="muted"><input id="learnedToggle" type="checkbox" /> 已学习</label>
+                  <div class="field" style="margin:0; min-width: 220px">
+                    <div class="label">自评（0-5，低分更优先复习）</div>
+                    <select id="qualitySelect">
+                      <option value="0">0 忘了</option>
+                      <option value="1">1 很吃力</option>
+                      <option value="2">2 勉强</option>
+                      <option value="3">3 还行</option>
+                      <option value="4">4 熟练</option>
+                      <option value="5">5 秒答</option>
+                    </select>
+                  </div>
+                  <div class="muted" id="lastReviewedHint">上次复习：-</div>
+                  <button id="resetStateBtn" class="btn secondary">重置为未学习</button>
+                </div>
+                <div class="muted">说明：未学习题目不会出现在“复习”队列；遗忘题（自评 ≤ 2）会出现在“学习（新题/遗忘）”。</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/hljs-init.js"></script>
+    <script src="/md.js"></script>
+    <script src="/manage.js"></script>
+  </body>
+</html>
+
