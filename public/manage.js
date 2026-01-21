@@ -109,6 +109,7 @@ function syncEditorFromSelectedQuestion() {
   contentEl.value = q.content || "";
   titleHint.textContent = `当前题目：${q.title}`;
   previewEl.innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "") : escapeHtml(q.content || "");
+  window.applyHighlight?.(previewEl);
   state.dirty.content = false;
   $("saveMsg").textContent = "";
 }
@@ -417,7 +418,10 @@ function bind() {
     state.dirty.content = true;
     $("saveMsg").textContent = "未保存（失去焦点会保存）";
     const previewEl = $("qPreview");
-    if (previewEl && window.renderMarkdown) previewEl.innerHTML = window.renderMarkdown($("qContent").value);
+    if (previewEl && window.renderMarkdown) {
+      previewEl.innerHTML = window.renderMarkdown($("qContent").value);
+      window.applyHighlight?.(previewEl);
+    }
   });
   $("qContent").addEventListener("keydown", (e) => {
     // Markdown shortcuts (Ctrl/⌘)

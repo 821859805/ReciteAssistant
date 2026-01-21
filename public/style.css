@@ -352,13 +352,13 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(14,165,233,.35); b
 }
 .mdPreview pre{
   margin: 10px 0;
-  padding: 10px 12px;
+  padding: 0;
   overflow:auto;
-  background: rgba(2,6,23,.06);
+  background: transparent;
   border: 1px solid rgba(15,23,42,.10);
   border-radius: 12px;
 }
-.mdPreview code{
+.mdPreview p code, .mdPreview li code, .mdPreview blockquote code{
   background: rgba(2,6,23,.06);
   border: 1px solid rgba(15,23,42,.10);
   border-radius: 8px;
@@ -369,7 +369,6 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(14,165,233,.35); b
   background: transparent;
   border: none;
   padding: 0;
-  color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.55;
@@ -378,13 +377,12 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(14,165,233,.35); b
 /* 让学习页/新题页的代码块也符合 Markdown 风格 */
 .answerBody pre{
   margin: 10px 0;
-  padding: 10px 12px;
+  padding: 0;
   overflow:auto;
-  background: rgba(2,6,23,.06);
   border: 1px solid rgba(15,23,42,.10);
   border-radius: 12px;
 }
-.answerBody code{
+.answerBody p code, .answerBody li code, .answerBody blockquote code{
   background: rgba(2,6,23,.06);
   border: 1px solid rgba(15,23,42,.10);
   border-radius: 8px;
@@ -395,7 +393,6 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(14,165,233,.35); b
   background: transparent;
   border: none;
   padding: 0;
-  color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.55;

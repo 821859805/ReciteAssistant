@@ -526,6 +526,10 @@ app.post("/api/review", (req, res) => {
   res.json({ ok: true, srs: q.srs });
 });
 
+// Vendor assets (syntax highlight)
+app.use("/vendor/hljs", express.static(path.join(__dirname, "node_modules", "highlight.js", "es")));
+app.use("/vendor/hljs-styles", express.static(path.join(__dirname, "node_modules", "highlight.js", "styles")));
+
 app.use(express.static(path.join(__dirname, "public")));
 
 app.listen(PORT, () => {

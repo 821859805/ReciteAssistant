@@ -152,6 +152,7 @@ function renderRunning(nowMs) {
   $("timerBadge").textContent = `${left}s`;
   $("questionTitle").textContent = q.title;
   $("answerBody").innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "（无内容）") : (q.content || "（无内容）");
+  window.applyHighlight?.($("answerBody"));
   $("hint").textContent = `本题倒计时：${state.seconds[state.idx]}s（按答案长度估算）`;
   $("skipBtn").disabled = false;
   $("stopBtn").disabled = false;
