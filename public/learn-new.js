@@ -122,7 +122,9 @@ function renderIdle() {
   $("stageBadge").textContent = "未开始";
   $("timerBadge").textContent = "--";
   $("questionTitle").textContent = "选择范围并开启学习模式";
-  $("answerBody").textContent = "提示：开启学习模式后，先等待 10 秒再进入第一题。";
+  $("answerBody").innerHTML = window.renderMarkdown
+    ? window.renderMarkdown("提示：开启学习模式后，先等待 **10 秒** 再进入第一题。")
+    : "提示：开启学习模式后，先等待 10 秒再进入第一题。";
   $("hint").textContent = "";
   $("skipBtn").disabled = true;
   $("stopBtn").disabled = true;
@@ -134,7 +136,9 @@ function renderWarmup(nowMs) {
   const left = Math.ceil(Math.max(0, state.warmupEndsAt - nowMs) / 1000);
   $("timerBadge").textContent = `${left}s`;
   $("questionTitle").textContent = "10 秒后开始学习（请坐直、深呼吸、进入状态）";
-  $("answerBody").textContent = "准备期内不会计入题目倒计时，但会计入本轮学习已用时间。";
+  $("answerBody").innerHTML = window.renderMarkdown
+    ? window.renderMarkdown("准备期内不会计入题目倒计时，但会计入本轮学习已用时间。")
+    : "准备期内不会计入题目倒计时，但会计入本轮学习已用时间。";
   $("hint").textContent = "准备结束后会自动进入第 1 题。";
   $("skipBtn").disabled = true;
   $("stopBtn").disabled = false;
@@ -147,7 +151,7 @@ function renderRunning(nowMs) {
   const left = Math.ceil(Math.max(0, state.qEndsAt - nowMs) / 1000);
   $("timerBadge").textContent = `${left}s`;
   $("questionTitle").textContent = q.title;
-  $("answerBody").textContent = q.content || "（无内容）";
+  $("answerBody").innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "（无内容）") : (q.content || "（无内容）");
   $("hint").textContent = `本题倒计时：${state.seconds[state.idx]}s（按答案长度估算）`;
   $("skipBtn").disabled = false;
   $("stopBtn").disabled = false;
@@ -157,7 +161,9 @@ function renderDone() {
   $("stageBadge").textContent = "完成";
   $("timerBadge").textContent = "--";
   $("questionTitle").textContent = "本轮学习完成。建议休息 2-5 分钟再继续。";
-  $("answerBody").textContent = "你可以再次开启学习模式：遗忘题/新题会按规则进入队列。";
+  $("answerBody").innerHTML = window.renderMarkdown
+    ? window.renderMarkdown("你可以再次开启学习模式：遗忘题/新题会按规则进入队列。")
+    : "你可以再次开启学习模式：遗忘题/新题会按规则进入队列。";
   $("hint").textContent = "";
   $("skipBtn").disabled = true;
   $("stopBtn").disabled = true;

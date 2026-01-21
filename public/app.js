@@ -104,7 +104,7 @@ function renderQuestion() {
   $("queueBadge").textContent = state.mode === "due" ? "复习" : state.mode === "new" ? "新题" : "混合";
   $("counter").textContent = `${state.idx + 1} / ${total}`;
   $("questionTitle").textContent = q.title;
-  $("answerBody").textContent = q.content || "（无内容）";
+  $("answerBody").innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "") : escapeHtml(q.content || "（无内容）");
   $("answerBody").classList.add("hidden");
   $("toggleAnswerBtn").textContent = "显示答案";
   $("recallInput").value = "";

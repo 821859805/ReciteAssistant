@@ -225,7 +225,7 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(106,228,255,.45); 
   color: #dfe6ff;
   font-size: 14px;
   line-height: 1.7;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 .hidden{ display:none; }
 
@@ -297,6 +297,79 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(106,228,255,.45); 
 .listWrap{ min-height: 420px; max-height: 62vh; overflow:auto; padding-right: 6px; }
 .editor{ min-height: 420px; }
 
+.mdSplit{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:12px;
+  margin-top: 8px;
+}
+.mdPane{
+  background: rgba(8,12,25,.26);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px;
+  min-height: 360px;
+}
+.mdPaneTitle{
+  font-weight: 900;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.mdEditor{
+  min-height: 300px;
+  height: 52vh;
+  width:100%;
+}
+.mdPreview{
+  min-height: 300px;
+  height: 52vh;
+  overflow:auto;
+  padding: 4px 2px;
+  color: #dfe6ff;
+  line-height: 1.7;
+}
+.mdPreview h1,.mdPreview h2,.mdPreview h3,.mdPreview h4,.mdPreview h5,.mdPreview h6{
+  margin: 12px 0 8px;
+  line-height: 1.25;
+}
+.mdPreview p{ margin: 8px 0; }
+.mdPreview ul,.mdPreview ol{ margin: 8px 0 8px 18px; padding:0; }
+.mdPreview li{ margin: 4px 0; }
+.mdPreview blockquote{
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-left: 3px solid rgba(106,228,255,.35);
+  background: rgba(106,228,255,.08);
+  border-radius: 10px;
+}
+.mdPreview pre{
+  margin: 10px 0;
+  padding: 10px 12px;
+  overflow:auto;
+  background: rgba(0,0,0,.35);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 12px;
+}
+.mdPreview code{
+  background: rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.10);
+  border-radius: 8px;
+  padding: 1px 6px;
+  color: #cfe7ff;
+}
+.mdPreview pre code{
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.mdPreview hr{
+  border: none;
+  border-top: 1px solid rgba(255,255,255,.12);
+  margin: 12px 0;
+}
+.mdPreview a{ color: rgba(106,228,255,.95); }
+
 .tree{
   margin-top: 10px;
   display:flex;
@@ -365,5 +438,7 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(106,228,255,.45); 
   .itemTitle{ max-width: 100%; }
   .indent1{ margin-left: 10px; }
   .indent2{ margin-left: 22px; }
+  .mdSplit{ grid-template-columns: 1fr; }
+  .mdEditor,.mdPreview{ height: 40vh; }
 }
 

@@ -91,12 +91,14 @@ function syncEditorFromSelectedQuestion() {
   const contentEl = $("qContent");
   const delBtn = $("deleteQuestionBtn");
   const titleHint = $("questionTitleHint");
+  const previewEl = $("qPreview");
 
   if (!q) {
     contentEl.value = "";
     contentEl.disabled = true;
     delBtn.disabled = true;
     titleHint.textContent = "未选中题目（请在左侧选择题目）";
+    previewEl.innerHTML = `<div class="muted">未选中题目</div>`;
     $("saveMsg").textContent = "";
     state.dirty.content = false;
     return;
@@ -106,6 +108,7 @@ function syncEditorFromSelectedQuestion() {
   delBtn.disabled = false;
   contentEl.value = q.content || "";
   titleHint.textContent = `当前题目：${q.title}`;
+  previewEl.innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "") : escapeHtml(q.content || "");
   state.dirty.content = false;
   $("saveMsg").textContent = "";
 }
@@ -413,6 +416,8 @@ function bind() {
   $("qContent").addEventListener("input", () => {
     state.dirty.content = true;
     $("saveMsg").textContent = "未保存（失去焦点会保存）";
+    const previewEl = $("qPreview");
+    if (previewEl && window.renderMarkdown) previewEl.innerHTML = window.renderMarkdown($("qContent").value);
   });
   $("qContent").addEventListener("blur", () => {
     saveQuestionContentIfNeeded();

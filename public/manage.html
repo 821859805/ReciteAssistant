@@ -49,8 +49,17 @@
             </div>
             <div class="editor">
               <div class="field">
-                <div class="label">答案内容（失去焦点自动保存）</div>
-                <textarea id="qContent" placeholder="先在左侧选中某个题目，然后在这里编辑答案内容"></textarea>
+                <div class="label">答案（Markdown 编辑区 ⇋ 渲染预览区）</div>
+                <div class="mdSplit">
+                  <div class="mdPane">
+                    <div class="mdPaneTitle">渲染前（可编辑）</div>
+                    <textarea id="qContent" class="mdEditor" placeholder="先在左侧选中某个题目，然后在这里用 Markdown 编辑答案内容"></textarea>
+                  </div>
+                  <div class="mdPane">
+                    <div class="mdPaneTitle">渲染后（不可编辑，用户看到的就是这里）</div>
+                    <div id="qPreview" class="mdPreview">未选中题目</div>
+                  </div>
+                </div>
               </div>
               <div class="row">
                 <button id="deleteQuestionBtn" class="btn secondary">删除该题</button>
@@ -62,6 +71,7 @@
       </main>
     </div>
 
+    <script src="/md.js"></script>
     <script src="/manage.js"></script>
   </body>
 </html>
