@@ -1,0 +1,15 @@
+{
+  "name": "reciteassistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "八股文辅助背书软件（本地文件数据库 + 学习/间隔重复）",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "NODE_ENV=production node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

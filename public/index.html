@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReciteAssistant - 学习页</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="logo">RA</div>
+          <div class="title">
+            <div class="name">ReciteAssistant</div>
+            <div class="desc">学习页（间隔重复 + 主动回忆）</div>
+          </div>
+        </div>
+        <div class="actions">
+          <label class="btn secondary">
+            导入题库(JSON)
+            <input id="importFile" type="file" accept="application/json" hidden />
+          </label>
+          <a class="btn secondary" href="/api/export">导出题库</a>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="sidebar">
+          <div class="panel">
+            <div class="panelTitle">学习范围</div>
+            <div class="field">
+              <div class="label">题库</div>
+              <select id="bankSelect"></select>
+            </div>
+            <div class="field">
+              <div class="label">章节</div>
+              <select id="chapterSelect"></select>
+            </div>
+            <div class="field">
+              <div class="label">小节</div>
+              <select id="sectionSelect"></select>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panelTitle">学习模式</div>
+            <div class="seg">
+              <button class="segBtn" data-mode="mixed">混合</button>
+              <button class="segBtn" data-mode="due">只复习</button>
+              <button class="segBtn" data-mode="new">只新题</button>
+            </div>
+            <div class="field">
+              <div class="label">每次取题数</div>
+              <input id="limitInput" type="number" min="5" max="200" value="30" />
+            </div>
+            <button id="startBtn" class="btn primary full">开始学习</button>
+            <div class="stats" id="stats"></div>
+          </div>
+
+          <div class="panel subtle">
+            <div class="panelTitle">学习方案（建议）</div>
+            <ul class="tips">
+              <li><b>先遮盖再回忆</b>：先说出要点，再点“显示答案”。</li>
+              <li><b>用评分驱动遗忘曲线</b>：0-2 代表忘/吃力，会更快再出现；3-5 会拉长间隔。</li>
+              <li><b>混合模式</b>：优先复习到期题，穿插少量新题，避免“只刷新题”。</li>
+              <li><b>答题结构</b>：建议把内容写成“定义 → 原理 → 细节 → 例子 → 对比 → 场景/调优”。</li>
+            </ul>
+          </div>
+        </aside>
+
+        <section class="content">
+          <div class="card" id="learnCard">
+            <div class="cardHeader">
+              <div class="badge" id="queueBadge">未开始</div>
+              <div class="counter" id="counter">0 / 0</div>
+            </div>
+
+            <div class="question" id="questionTitle">选择范围并开始学习</div>
+
+            <div class="recall">
+              <div class="recallTitle">主动回忆区（先说出来/写下来）</div>
+              <textarea id="recallInput" placeholder="在这里写下你的回答要点（可选，用于强制回忆）。"></textarea>
+            </div>
+
+            <div class="answer">
+              <div class="answerHeader">
+                <div class="answerTitle">答案</div>
+                <button id="toggleAnswerBtn" class="btn secondary">显示答案</button>
+              </div>
+              <div id="answerBody" class="answerBody hidden"></div>
+            </div>
+
+            <div class="rate">
+              <div class="rateTitle">自评（0-5）</div>
+              <div class="rateBtns">
+                <button class="rateBtn q0" data-q="0" disabled>0 忘了</button>
+                <button class="rateBtn q1" data-q="1" disabled>1 很吃力</button>
+                <button class="rateBtn q2" data-q="2" disabled>2 勉强</button>
+                <button class="rateBtn q3" data-q="3" disabled>3 还行</button>
+                <button class="rateBtn q4" data-q="4" disabled>4 熟练</button>
+                <button class="rateBtn q5" data-q="5" disabled>5 秒答</button>
+              </div>
+              <div class="nextHint" id="nextHint"></div>
+            </div>
+          </div>
+
+          <div class="panel" id="quickAddPanel">
+            <div class="panelTitle">快速导入（当前小节）</div>
+            <div class="muted">粘贴 JSON 数组：<code>[{"title":"题目","content":"内容"}, ...]</code></div>
+            <textarea id="importQuestionsText" placeholder='[{"title":"...","content":"..."}]'></textarea>
+            <button id="importQuestionsBtn" class="btn secondary">导入到当前小节</button>
+            <div id="importQuestionsMsg" class="muted"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
+
