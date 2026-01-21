@@ -105,7 +105,12 @@ function renderQuestion() {
   $("counter").textContent = `${state.idx + 1} / ${total}`;
   $("questionTitle").textContent = q.title;
   $("answerBody").innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "") : escapeHtml(q.content || "（无内容）");
-  window.applyHighlight?.($("answerBody"));
+  const root = $("answerBody");
+  if (window.applyHighlight) window.applyHighlight(root);
+  else {
+    window.__hljsPending = window.__hljsPending || [];
+    window.__hljsPending.push(root);
+  }
   $("answerBody").classList.add("hidden");
   $("toggleAnswerBtn").textContent = "显示答案";
   $("recallInput").value = "";

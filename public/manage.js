@@ -109,7 +109,11 @@ function syncEditorFromSelectedQuestion() {
   contentEl.value = q.content || "";
   titleHint.textContent = `当前题目：${q.title}`;
   previewEl.innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "") : escapeHtml(q.content || "");
-  window.applyHighlight?.(previewEl);
+  if (window.applyHighlight) window.applyHighlight(previewEl);
+  else {
+    window.__hljsPending = window.__hljsPending || [];
+    window.__hljsPending.push(previewEl);
+  }
   state.dirty.content = false;
   $("saveMsg").textContent = "";
 }
@@ -420,7 +424,11 @@ function bind() {
     const previewEl = $("qPreview");
     if (previewEl && window.renderMarkdown) {
       previewEl.innerHTML = window.renderMarkdown($("qContent").value);
-      window.applyHighlight?.(previewEl);
+      if (window.applyHighlight) window.applyHighlight(previewEl);
+      else {
+        window.__hljsPending = window.__hljsPending || [];
+        window.__hljsPending.push(previewEl);
+      }
     }
   });
   $("qContent").addEventListener("keydown", (e) => {

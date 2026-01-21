@@ -26,6 +26,7 @@ body{
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
 }
 
+/* 默认仅用于“行内 code”强调；代码块会在下方覆盖为正常文本色并交给高亮主题着色 */
 code{ color: #0b5cab; }
 
 .app{ min-height:100%; display:flex; flex-direction:column; }
@@ -369,6 +370,8 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(14,165,233,.35); b
   background: transparent;
   border: none;
   padding: 0;
+  /* 避免被全局 code 规则染蓝；高亮主题会在内部 span 上覆盖颜色 */
+  color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.55;
@@ -393,6 +396,8 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(14,165,233,.35); b
   background: transparent;
   border: none;
   padding: 0;
+  /* 避免被全局 code 规则染蓝；高亮主题会在内部 span 上覆盖颜色 */
+  color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 13px;
   line-height: 1.55;
