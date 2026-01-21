@@ -316,7 +316,7 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(14,165,233,.35); b
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 10px;
-  min-height: 520px;
+  min-height: 360px;
 }
 .mdPaneTitle{
   font-weight: 900;
@@ -325,13 +325,13 @@ select:focus, input:focus, textarea:focus{ border-color: rgba(14,165,233,.35); b
   margin-bottom: 8px;
 }
 .mdEditor{
-  min-height: 420px;
-  height: 68vh;
+  min-height: 260px;
+  height: 44vh;
   width:100%;
 }
 .mdPreview{
-  min-height: 420px;
-  height: 68vh;
+  min-height: 260px;
+  height: 44vh;
   overflow:auto;
   padding: 4px 2px;
   color: var(--text);
