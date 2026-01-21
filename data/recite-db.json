@@ -1,28 +1,147 @@
 {
   "version": 1,
-  "updatedAt": "2026-01-21T00:00:00.000Z",
+  "updatedAt": "2026-01-21T09:55:30.127Z",
   "banks": [
     {
-      "id": "demo-java",
-      "name": "Java",
-      "createdAt": "2026-01-21T00:00:00.000Z",
+      "id": "c95deadd-0392-467a-8b28-c5f18ecec7d2",
+      "name": "Go",
+      "createdAt": "2026-01-21T08:57:31.716Z",
       "chapters": [
         {
-          "id": "demo-java-jvm",
-          "name": "JVM",
-          "createdAt": "2026-01-21T00:00:00.000Z",
+          "id": "7e664921-e65e-43ed-8850-b81b6cab197f",
+          "name": "第六章 Context",
+          "createdAt": "2026-01-21T08:57:37.458Z",
           "questions": [
             {
-              "id": "demo-q1",
-              "title": "说说 JVM 垃圾回收的整体流程？",
-              "content": "从**可达性分析**开始，确定存活对象；再根据分代策略对新生代/老年代分别执行相应算法（复制/标记-清除/标记-整理）。\n\n- 触发：Minor GC / Major GC / Full GC\n- 常见收集器：Serial/ParNew/CMS/G1/ZGC/Shenandoah\n- 关键目标：暂停时间（STW）、吞吐、内存占用\n\n复习时建议用“**触发条件 → 回收对象范围 → 算法/收集器 → 代价(STW/吞吐) → 调优手段**”的结构回答。",
-              "createdAt": "2026-01-21T00:00:00.000Z",
-              "updatedAt": "2026-01-21T00:00:00.000Z",
+              "id": "aefa8ab4-1b6c-4e9c-b713-d97ff5f42cd1",
+              "title": "Context是什么",
+              "content": "是什么：go语言里的context实际上是一个接口，提供了Deadline()，Done()，Err()以及Value()四种方法。它在Go 1.7 标准库被引入。本质上是一个信号传递和范围控制的工具。它的核心作用是在一个请求处理链路中（跨越多个函数和goroutine），优雅地传递取消信号（cancellation）、超时（timeout）和截止日期（deadline），并能携带一些范围内的键值对数据。\n\n原理上：\n```go\ntype Context interface {\n    Deadline() (deadline time.Time, ok bool)  // Deadline方法的第一个返回值表示还有多久到期， 第二个返回值代表是否被超时时间控制\n    Done() <-chan struct{}  // Done() 返回一个 只读channel，当这个channel被关闭时，说明这个context被取消\n    Err() error // Err() 返回一个错误，表示channel被关闭的原因，例如是被取消，还是超时关闭\n    Value(key interface{}) interface{}) // value方法返回指定key对应的value，这是context携带的值\n}\n```\n- `Deadline()`返回一个时间点，告知任务何时应该被取消\n- `Done()`返回一个channel，当`Context`被取消或超时，这个channel会被关闭，这是写成监听或取消信号的核心\n- `Err()`在`Done()`的channel关闭后，它会解释关闭的原因，是主动取消（Canceled）还是超时（DeadlineExceeded）\n- `Value()` - 允许Context在调用链中携带请求范围的键值对数据\n",
+              "createdAt": "2026-01-21T08:57:45.774Z",
+              "updatedAt": "2026-01-21T09:26:05.802Z",
               "srs": {
                 "ease": 2.5,
                 "intervalDays": 0,
                 "repetitions": 0,
-                "dueAt": "2026-01-21T00:00:00.000Z",
+                "dueAt": "2026-01-21T08:57:45.774Z",
+                "lastReviewedAt": null,
+                "lapses": 0,
+                "lastQuality": null
+              }
+            },
+            {
+              "id": "a21936f1-4fa2-44c7-8f07-9508c0630932",
+              "title": "Context有什么用",
+              "content": "有什么用：主要解决三个核心问题：**超时控制**、**取消信号传播**和**请求级数据传递**\n\n**超时控制：**一个HTTP请求需要调用多个下游服务，我们通过`context.WithTimeout`设置整体超时时间，当超时发生时，所有子操作都会收到取消信号并立即退出，避免资源浪费。取消信号的传播是通过Context来实现的，父Context取消时，所有子Context都会自动取消\n\n**请求级的数据传递：**Context能传递用户ID、请求ID等请求级的元数据。需要注意的时，Context应该作为函数的第一个参数传递，不要存储在结构体中，并且传递的数据应该是请求级别的，不要滥用\n",
+              "createdAt": "2026-01-21T09:09:59.842Z",
+              "updatedAt": "2026-01-21T09:15:23.337Z",
+              "srs": {
+                "ease": 2.5,
+                "intervalDays": 0,
+                "repetitions": 0,
+                "dueAt": "2026-01-21T09:09:59.842Z",
+                "lastReviewedAt": null,
+                "lapses": 0,
+                "lastQuality": null
+              }
+            },
+            {
+              "id": "c08b4708-203b-46fb-8734-b9907eacc210",
+              "title": "Context.Value查找过程是怎样的？",
+              "content": "**是什么**：Context.Value的查找过程是一个链式递归查找的过程，从当前Context开始，沿着父Context链一致向上查找直到找到对应的key或者到达根Context\n\n**原理：**调用`ctx.Value(key)`时，首先检查当前Context是否包含这个key，如果当前层没有，就会调用`parent.Value(key)`继续向上查找，这个过程会一直递归下去，直到找到匹配的key返回对应的value，或者查找到根Context返回nil",
+              "createdAt": "2026-01-21T09:15:24.948Z",
+              "updatedAt": "2026-01-21T09:23:06.921Z",
+              "srs": {
+                "ease": 2.5,
+                "intervalDays": 0,
+                "repetitions": 0,
+                "dueAt": "2026-01-21T09:15:24.948Z",
+                "lastReviewedAt": null,
+                "lapses": 0,
+                "lastQuality": null
+              }
+            },
+            {
+              "id": "53769c38-db70-4f4e-85f6-0373e6a16524",
+              "title": "Context如何取消？",
+              "content": "Context的取消是通过channel关闭信号实现的，主要有三种取消方式。\n\n主动取消，通过`context.WithCancel`创建的Context会返回一个cancel函数，调用这个函数就会关闭内部的done channel，所有监听这个Context的goroutine都能通过`**ctx.Done()**`收到取消信号。\n\n超时取消，`**context.WithTimeout**`和`**context.WithDeadline**`会启动一个定时器，到达指定时间后自动调用cancel函数触发取消。\n\n级联取消，当父Context被取消时，所有子Context会自动被取消，这是通过Context树的结构实现的。",
+              "createdAt": "2026-01-21T09:23:08.176Z",
+              "updatedAt": "2026-01-21T09:24:23.943Z",
+              "srs": {
+                "ease": 2.5,
+                "intervalDays": 0,
+                "repetitions": 0,
+                "dueAt": "2026-01-21T09:23:08.176Z",
+                "lastReviewedAt": null,
+                "lapses": 0,
+                "lastQuality": null
+              }
+            }
+          ]
+        },
+        {
+          "id": "958d28ae-01f8-45df-b5a8-7e030a2cc6c1",
+          "name": "第七章 Interface面试题",
+          "createdAt": "2026-01-21T09:26:11.971Z",
+          "questions": [
+            {
+              "id": "d681cbb0-908d-4495-82b2-af790e2808d4",
+              "title": "Interface底层原理？",
+              "content": "**原理**：底层有两种数据结构：eface和iface。\n- eface是空的interface{}实现，只包含两个指针：`_type`指向类型信息，`data`指向实际数据。这就是为什么空接口能存储任意类型值的原因，通过类型指针来标识具体类型，通过数据指针来访问实际值\n- iface是带方法的interface实现，包含`itab`和`data`两部分。`itab`是核心，它存储了接口类型、具体类型，以及方法表。方法表是个函数指针数组，保存了该类型实现的所有接口方法的地址。\n\n**代码**：\neface：\n```go\ntype eface struct {\n   _type *_type\n   data  unsafe.Pointer\n}\n```\n\niface定义：\n```go\ntype iface struct {\n   tab  *itab\n   data unsafe.Pointer\n}\n\ntype itab struct {\n   inter *interfacetype\n   _type *_type\n   hash  uint32 // copy of _type.hash. Used for type switches.\n   _     [4]byte\n   fun   [1]uintptr // variable sized. fun[0]==0 means _type does not implement inter.\n}\n```",
+              "createdAt": "2026-01-21T09:26:46.077Z",
+              "updatedAt": "2026-01-21T09:31:03.276Z",
+              "srs": {
+                "ease": 2.5,
+                "intervalDays": 0,
+                "repetitions": 0,
+                "dueAt": "2026-01-21T09:26:46.077Z",
+                "lastReviewedAt": null,
+                "lapses": 0,
+                "lastQuality": null
+              }
+            },
+            {
+              "id": "660153d2-278d-4492-ab1b-499a05bf9712",
+              "title": "iface和eface区别是什么？",
+              "content": "**是什么：**核心区别在于是否包含方法信息\n**为什么：**\n- eface是空接口interface{}的底层实现，结构非常简单，只有两个字段：`_type`指向类型信息，`data`指向实际数据。因为空接口没有方法约束，所以不需要存储方法相关信息\n- iface是非空接口的底层实现，结构相对复杂，包含`itab`和`data`。关键是这个`itab`，它不仅包含类型信息，还包含了一个方法表，存储着该类型实现的所有接口方法的函数指针",
+              "createdAt": "2026-01-21T09:31:13.877Z",
+              "updatedAt": "2026-01-21T09:36:35.820Z",
+              "srs": {
+                "ease": 2.5,
+                "intervalDays": 0,
+                "repetitions": 0,
+                "dueAt": "2026-01-21T09:31:13.877Z",
+                "lastReviewedAt": null,
+                "lapses": 0,
+                "lastQuality": null
+              }
+            },
+            {
+              "id": "cff78b20-94f0-4f39-a354-11783136a204",
+              "title": "类型断言和断言的区别是什么？",
+              "content": "**基本差别：**类型转换、类型断言本质都是把一个类型转换成另外一个类型。不同之处在于，类型断言是对接口变量进行的操作，对于类型转换而言，类型转换是在编译期确定的强制转换，转换前后的两个类型要相互兼容才行，语法是`T(value)`。而类型断言是运行期的动态检查，专门用于从接口类型中提取具体类型，语法是`value.(T)`\n\n**安全差别：**类型转换在编译期保证安全性，而类型断言可能在运行时失败。所以实际开发中更常用安全版本的类型断言`value, ok := x.(string)`，通过ok判断是否成功。\n\n**使用场景不同**：类型转换主要解决数值类型、字符串、切片等之间的转换问题；类型断言主要用于接口编程，当你拿到一个interface{}需要还原成具体类型时使用。\n\n**底层实现也不同**：类型转换通常是简单的内存重新解释或者数据格式调整；类型断言需要检查接口的底层类型信息，涉及到runtime的类型系统。",
+              "createdAt": "2026-01-21T09:39:24.633Z",
+              "updatedAt": "2026-01-21T09:42:34.089Z",
+              "srs": {
+                "ease": 2.5,
+                "intervalDays": 0,
+                "repetitions": 0,
+                "dueAt": "2026-01-21T09:39:24.633Z",
+                "lastReviewedAt": null,
+                "lapses": 0,
+                "lastQuality": null
+              }
+            },
+            {
+              "id": "5af18979-8cb2-430b-b9d2-0b253362d9d3",
+              "title": "Interface有哪些应用场景？",
+              "content": "**多态：**定义一个`Shape`接口并包含`Area()`方法，不同的图形需要具体实现这个接口，就能用统一的方式处理不同的图形，增加代码的可扩展性\n",
+              "createdAt": "2026-01-21T09:47:13.653Z",
+              "updatedAt": "2026-01-21T09:55:30.127Z",
+              "srs": {
+                "ease": 2.5,
+                "intervalDays": 0,
+                "repetitions": 0,
+                "dueAt": "2026-01-21T09:47:13.653Z",
                 "lastReviewedAt": null,
                 "lapses": 0,
                 "lastQuality": null
