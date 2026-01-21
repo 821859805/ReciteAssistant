@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ReciteAssistant - 学习页</title>
+    <title>ReciteAssistant - 复习</title>
     <link rel="stylesheet" href="/style.css" />
     <link rel="stylesheet" href="/vendor/hljs-styles/github.min.css" />
   </head>
@@ -14,12 +14,12 @@
           <div class="logo">RA</div>
           <div class="title">
             <div class="name">ReciteAssistant</div>
-            <div class="desc">学习页（间隔重复 + 主动回忆）</div>
+            <div class="desc">复习（仅已学习题目，按自评优先级排序）</div>
           </div>
         </div>
         <div class="actions">
           <a class="btn secondary" href="/manage.html">题库管理</a>
-          <a class="btn secondary" href="/learn-new.html">新题/遗忘题学习</a>
+          <a class="btn secondary" href="/learn-new.html">学习（新题/遗忘）</a>
           <label class="btn secondary">
             导入题库(JSON)
             <input id="importFile" type="file" accept="application/json" hidden />
@@ -43,27 +43,21 @@
           </div>
 
           <div class="panel">
-            <div class="panelTitle">学习模式</div>
-            <div class="seg">
-              <button class="segBtn" data-mode="mixed">混合</button>
-              <button class="segBtn" data-mode="due">只复习</button>
-              <button class="segBtn" data-mode="new">只新题</button>
-            </div>
+            <div class="panelTitle">复习</div>
             <div class="field">
               <div class="label">每次取题数</div>
               <input id="limitInput" type="number" min="5" max="200" value="30" />
             </div>
-            <button id="startBtn" class="btn primary full">开始学习</button>
+            <button id="startBtn" class="btn primary full">开始复习</button>
             <div class="stats" id="stats"></div>
           </div>
 
           <div class="panel subtle">
-            <div class="panelTitle">学习方案（建议）</div>
+            <div class="panelTitle">复习规则</div>
             <ul class="tips">
-              <li><b>先遮盖再回忆</b>：先说出要点，再点“显示答案”。</li>
-              <li><b>用评分驱动遗忘曲线</b>：0-2 代表忘/吃力，会更快再出现；3-5 会拉长间隔。</li>
-              <li><b>混合模式</b>：优先复习到期题，穿插少量新题，避免“只刷新题”。</li>
-              <li><b>答题结构</b>：建议把内容写成“定义 → 原理 → 细节 → 例子 → 对比 → 场景/调优”。</li>
+              <li><b>仅复习已学习题目</b>：未学习题目请去“学习（新题/遗忘）”。</li>
+              <li><b>优先级</b>：按自评从低到高；同分按上次复习时间更久优先。</li>
+              <li><b>遮盖-回忆-揭示</b>：先回忆，再看答案，再评分更新优先级。</li>
             </ul>
           </div>
         </aside>
@@ -75,7 +69,7 @@
               <div class="counter" id="counter">0 / 0</div>
             </div>
 
-            <div class="question" id="questionTitle">选择范围并开始学习</div>
+            <div class="question" id="questionTitle">选择范围并开始复习</div>
 
             <div class="recall">
               <div class="recallTitle">主动回忆区（先说出来/写下来）</div>
@@ -104,13 +98,6 @@
             </div>
           </div>
 
-          <div class="panel" id="quickAddPanel">
-            <div class="panelTitle">快速导入（当前章节）</div>
-            <div class="muted">粘贴 JSON 数组：<code>[{"title":"题目","content":"内容"}, ...]</code></div>
-            <textarea id="importQuestionsText" placeholder='[{"title":"...","content":"..."}]'></textarea>
-            <button id="importQuestionsBtn" class="btn secondary">导入到当前章节</button>
-            <div id="importQuestionsMsg" class="muted"></div>
-          </div>
         </section>
       </main>
     </div>

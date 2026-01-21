@@ -2,10 +2,9 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   db: null,
-  mode: "mixed",
   scope: { bankId: null, chapterId: null },
   queue: [],
-  counts: { due: 0, new: 0, total: 0 },
+  counts: { learned: 0, unlearned: 0, total: 0 },
   idx: 0,
   revealed: false
 };
@@ -38,20 +37,13 @@ async function apiPost(path, body) {
   return await res.json();
 }
 
-function setMode(mode) {
-  state.mode = mode;
-  document.querySelectorAll(".segBtn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.mode === mode);
-  });
-}
-
 function setStats() {
   const s = state.counts;
   const scopeLabel = scopeLabelText();
   $("stats").innerHTML = `
     <div><b>范围</b>：${escapeHtml(scopeLabel)}</div>
-    <div><b>到期复习</b>：${s.due}，<b>新题</b>：${s.new}，<b>总题</b>：${s.total}</div>
-    <div><b>提示</b>：优先完成到期复习，再用混合模式穿插新题。</div>
+    <div><b>已学习</b>：${s.learned}，<b>未学习</b>：${s.unlearned}，<b>总题</b>：${s.total}</div>
+    <div><b>提示</b>：未学习题目不会出现在复习队列，请先去“学习（新题/遗忘）”。</div>
   `;
 }
 
@@ -83,7 +75,7 @@ function setRateEnabled(enabled) {
 function renderQuestion() {
   const total = state.queue.length;
   if (total === 0) {
-    setCardIdle("当前范围没有题目，或队列为空（可切换模式/范围或导入题目）。");
+    setCardIdle("当前范围没有可复习题目（仅复习已学习题目）。请先去“学习（新题/遗忘）”学习。");
     return;
   }
   if (state.idx >= total) {
@@ -101,7 +93,7 @@ function renderQuestion() {
   }
 
   const q = state.queue[state.idx];
-  $("queueBadge").textContent = state.mode === "due" ? "复习" : state.mode === "new" ? "新题" : "混合";
+  $("queueBadge").textContent = "复习";
   $("counter").textContent = `${state.idx + 1} / ${total}`;
   $("questionTitle").textContent = q.title;
   $("answerBody").innerHTML = window.renderMarkdown ? window.renderMarkdown(q.content || "") : escapeHtml(q.content || "（无内容）");
@@ -174,10 +166,9 @@ async function fetchQueue() {
   const params = new URLSearchParams();
   if (bankId) params.set("bankId", bankId);
   if (chapterId) params.set("chapterId", chapterId);
-  params.set("mode", state.mode);
   params.set("limit", String(limit));
 
-  const data = await apiGet(`/api/queue?${params.toString()}`);
+  const data = await apiGet(`/api/queue/review?${params.toString()}`);
   state.queue = data.queue || [];
   state.counts = data.counts || state.counts;
   state.idx = 0;
@@ -222,41 +213,7 @@ async function importDbFile(file) {
   setCardIdle("导入完成。请选择范围并开始学习。");
 }
 
-async function importQuestionsToCurrentSection() {
-  const bankId = $("bankSelect").value;
-  const chapterId = $("chapterSelect").value;
-  if (!bankId || !chapterId) {
-    $("importQuestionsMsg").textContent = "请先在左侧选择到“具体章节”，再导入。";
-    return;
-  }
-  const text = $("importQuestionsText").value.trim();
-  if (!text) return;
-  let arr;
-  try {
-    arr = JSON.parse(text);
-  } catch {
-    $("importQuestionsMsg").textContent = "JSON 解析失败，请检查格式。";
-    return;
-  }
-  if (!Array.isArray(arr)) {
-    $("importQuestionsMsg").textContent = "需要一个 JSON 数组。";
-    return;
-  }
-  const r = await apiPost("/api/questions", { bankId, chapterId, questions: arr });
-  $("importQuestionsMsg").textContent = `导入完成：新增 ${r.inserted || 0} 题。`;
-  await refreshDbAndSelectors();
-  // restore selection
-  $("bankSelect").value = bankId;
-  fillChapters();
-  $("chapterSelect").value = chapterId;
-}
-
 function bindEvents() {
-  document.querySelectorAll(".segBtn").forEach((btn) => {
-    btn.addEventListener("click", () => setMode(btn.dataset.mode));
-  });
-  setMode("mixed");
-
   $("bankSelect").addEventListener("change", () => {
     fillChapters();
     setStats();
@@ -312,17 +269,6 @@ function bindEvents() {
       alert(`导入失败：${err.message}`);
     } finally {
       e.target.value = "";
-    }
-  });
-
-  $("importQuestionsBtn").addEventListener("click", async () => {
-    $("importQuestionsBtn").disabled = true;
-    try {
-      await importQuestionsToCurrentSection();
-    } catch (e) {
-      $("importQuestionsMsg").textContent = `导入失败：${e.message}`;
-    } finally {
-      $("importQuestionsBtn").disabled = false;
     }
   });
 }

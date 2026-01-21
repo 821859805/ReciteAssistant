@@ -70,6 +70,26 @@
                 <button id="deleteQuestionBtn" class="btn secondary">删除该题</button>
                 <div class="muted" id="questionTitleHint">未选中题目</div>
               </div>
+              <div class="panel subtle" style="margin-top: 12px">
+                <div class="panelTitle">记忆状态（管理）</div>
+                <div class="row">
+                  <label class="muted"><input id="learnedToggle" type="checkbox" /> 已学习</label>
+                  <div class="field" style="margin:0; min-width: 220px">
+                    <div class="label">自评（0-5，低分更优先复习）</div>
+                    <select id="qualitySelect">
+                      <option value="0">0 忘了</option>
+                      <option value="1">1 很吃力</option>
+                      <option value="2">2 勉强</option>
+                      <option value="3">3 还行</option>
+                      <option value="4">4 熟练</option>
+                      <option value="5">5 秒答</option>
+                    </select>
+                  </div>
+                  <div class="muted" id="lastReviewedHint">上次复习：-</div>
+                  <button id="resetStateBtn" class="btn secondary">重置为未学习</button>
+                </div>
+                <div class="muted">说明：未学习题目不会出现在“复习”队列；遗忘题（自评 ≤ 2）会出现在“学习（新题/遗忘）”。</div>
+              </div>
             </div>
           </div>
         </section>

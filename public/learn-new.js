@@ -264,10 +264,14 @@ async function advanceToNext(reason) {
   updateAdaptiveTiming(reason);
   const current = state.queue[state.idx];
   if (current) {
-    // 学习模式默认给一个“还行(3)”的复习质量，避免永远停留在新题/遗忘题池
-    // 用户需要更细的控制可回到“学习页”用 0-5 自评。
+    // 学习（新题/遗忘）：根据是否“提前结束”决定一个初始自评，驱动后续复习优先级
+    // - 提前结束：认为背会了 -> 给偏高分
+    // - 倒计时走完仍自动下一题：认为不够熟 -> 给偏低分
     try {
-      await apiPost("/api/review", { questionId: current.id, quality: 3 });
+      let quality = 3;
+      if (reason === "auto") quality = current.kind === "forgot" ? 1 : 2;
+      else if (reason === "skip") quality = current.kind === "forgot" ? 3 : 4;
+      await apiPost("/api/review", { questionId: current.id, quality });
     } catch {
       // 忽略保存失败，仍然继续下一题，避免卡住
     }

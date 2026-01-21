@@ -92,6 +92,10 @@ function syncEditorFromSelectedQuestion() {
   const delBtn = $("deleteQuestionBtn");
   const titleHint = $("questionTitleHint");
   const previewEl = $("qPreview");
+  const learnedToggle = $("learnedToggle");
+  const qualitySelect = $("qualitySelect");
+  const lastReviewedHint = $("lastReviewedHint");
+  const resetStateBtn = $("resetStateBtn");
 
   if (!q) {
     contentEl.value = "";
@@ -99,6 +103,11 @@ function syncEditorFromSelectedQuestion() {
     delBtn.disabled = true;
     titleHint.textContent = "未选中题目（请在左侧选择题目）";
     previewEl.innerHTML = `<div class="muted">未选中题目</div>`;
+    if (learnedToggle) learnedToggle.checked = false;
+    if (qualitySelect) qualitySelect.value = "3";
+    if (qualitySelect) qualitySelect.disabled = true;
+    if (lastReviewedHint) lastReviewedHint.textContent = "上次复习：-";
+    if (resetStateBtn) resetStateBtn.disabled = true;
     $("saveMsg").textContent = "";
     state.dirty.content = false;
     return;
@@ -114,6 +123,16 @@ function syncEditorFromSelectedQuestion() {
     window.__hljsPending = window.__hljsPending || [];
     window.__hljsPending.push(previewEl);
   }
+
+  // memory state
+  const learned = !!(q.srs && q.srs.lastReviewedAt);
+  if (learnedToggle) learnedToggle.checked = learned;
+  if (qualitySelect) qualitySelect.disabled = !learned;
+  const qv = q.srs && q.srs.lastQuality != null ? String(q.srs.lastQuality) : "3";
+  if (qualitySelect) qualitySelect.value = qv;
+  if (lastReviewedHint) lastReviewedHint.textContent = `上次复习：${learned ? new Date(q.srs.lastReviewedAt).toLocaleString() : "-"}`;
+  if (resetStateBtn) resetStateBtn.disabled = !learned;
+
   state.dirty.content = false;
   $("saveMsg").textContent = "";
 }
@@ -168,7 +187,9 @@ function renderTree() {
       const questions = (Array.isArray(c.questions) ? c.questions : []).filter(Boolean);
       for (const q of questions) {
         const qActive = chapActive && state.selected.questionId === q.id;
-        const meta = q.srs?.lastReviewedAt ? `上次：${new Date(q.srs.lastReviewedAt).toLocaleDateString()}` : "未学";
+      const meta = q.srs?.lastReviewedAt
+        ? `Q${q.srs.lastQuality == null ? "-" : q.srs.lastQuality} · ${new Date(q.srs.lastReviewedAt).toLocaleDateString()}`
+        : "未学";
         html.push(`
           <div class="treeNode ${qActive ? "active" : ""}" data-level="question" data-bank-id="${escapeHtml(b.id)}" data-chapter-id="${escapeHtml(
           c.id
@@ -394,6 +415,20 @@ async function deleteQuestion(questionId) {
   renderAll();
 }
 
+async function updateQuestionState(partial) {
+  const q = selectedQuestion();
+  if (!q) return;
+  try {
+    await api.put(`/api/questions/${encodeURIComponent(q.id)}/state`, partial);
+    await reloadDb();
+    ensureSelectionValid();
+    renderAll();
+    syncEditorFromSelectedQuestion();
+  } catch (e) {
+    alert(`更新记忆状态失败：${e.message}`);
+  }
+}
+
 async function importDbFile(file) {
   const text = await file.text();
   let json;
@@ -522,6 +557,28 @@ function bind() {
   });
   $("qContent").addEventListener("blur", () => {
     saveQuestionContentIfNeeded();
+  });
+
+  $("learnedToggle")?.addEventListener("change", async (e) => {
+    const checked = !!e.target.checked;
+    if (!checked) {
+      await updateQuestionState({ learned: false });
+    } else {
+      const q = selectedQuestion();
+      const lastQuality = q && q.srs && q.srs.lastQuality != null ? q.srs.lastQuality : 3;
+      await updateQuestionState({ learned: true, lastQuality });
+    }
+  });
+  $("qualitySelect")?.addEventListener("change", async (e) => {
+    const qv = Number(e.target.value);
+    // 只在已学习状态下允许设置
+    const q = selectedQuestion();
+    if (!q || !(q.srs && q.srs.lastReviewedAt)) return;
+    await updateQuestionState({ learned: true, lastQuality: qv, lastReviewedAt: q.srs.lastReviewedAt });
+  });
+  $("resetStateBtn")?.addEventListener("click", async () => {
+    if (!confirm("确认重置为未学习？（将清空自评/上次复习时间）")) return;
+    await updateQuestionState({ learned: false });
   });
 
   $("importFile").addEventListener("change", async (e) => {

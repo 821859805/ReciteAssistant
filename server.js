@@ -155,44 +155,19 @@ function initSrsIfMissing(q) {
   if (!("lastQuality" in q.srs)) q.srs.lastQuality = null;
 }
 
-function sm2Update(srs, quality) {
-  // quality: 0..5
+function reviewUpdateSimple(srs, quality) {
+  // 本项目复习不使用“到期”概念：只记录用户自评与上次复习时间，用作优先级
   const q = Math.max(0, Math.min(5, Number(quality)));
-  const now = new Date();
-
-  let { ease, intervalDays, repetitions, lapses } = srs;
-  if (typeof ease !== "number") ease = 2.5;
-  if (typeof intervalDays !== "number") intervalDays = 0;
-  if (typeof repetitions !== "number") repetitions = 0;
-  if (typeof lapses !== "number") lapses = 0;
-
-  // Update ease factor (SM-2)
-  // EF': EF + (0.1 - (5-q)*(0.08+(5-q)*0.02))
-  ease = ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
-  if (ease < 1.3) ease = 1.3;
-
-  if (q < 3) {
-    repetitions = 0;
-    intervalDays = 1;
-    lapses += 1;
-  } else {
-    repetitions += 1;
-    if (repetitions === 1) intervalDays = 1;
-    else if (repetitions === 2) intervalDays = 6;
-    else intervalDays = Math.max(1, Math.round(intervalDays * ease));
-  }
-
-  const dueAt = new Date(now.getTime() + intervalDays * 24 * 60 * 60 * 1000).toISOString();
-
-  return {
-    ease,
-    intervalDays,
-    repetitions,
-    dueAt,
-    lastReviewedAt: now.toISOString(),
-    lapses,
-    lastQuality: q
-  };
+  const now = nowIso();
+  const next = { ...(srs || {}) };
+  next.lastReviewedAt = now;
+  next.lastQuality = q;
+  // 标记为“已学习过”
+  next.repetitions = Math.max(1, Number(next.repetitions || 0));
+  // 兼容字段保留但不用于调度
+  next.dueAt = now;
+  next.intervalDays = 0;
+  return next;
 }
 
 function findQuestionById(db, questionId) {
@@ -403,6 +378,39 @@ app.put("/api/questions/:questionId", (req, res) => {
   res.json(ctx.question);
 });
 
+app.put("/api/questions/:questionId/state", (req, res) => {
+  const questionId = String(req.params.questionId);
+  const { learned, lastQuality, lastReviewedAt } = req.body || {};
+  const db = readDb();
+  const ctx = findQuestionContext(db, questionId);
+  if (!ctx) return res.status(404).json({ error: "question_not_found" });
+  initSrsIfMissing(ctx.question);
+
+  if (learned === false) {
+    ctx.question.srs.lastReviewedAt = null;
+    ctx.question.srs.lastQuality = null;
+    ctx.question.srs.repetitions = 0;
+  } else if (learned === true) {
+    ctx.question.srs.lastReviewedAt = lastReviewedAt ? String(lastReviewedAt) : ctx.question.srs.lastReviewedAt || nowIso();
+    if (lastQuality == null) {
+      if (ctx.question.srs.lastQuality == null) ctx.question.srs.lastQuality = 3;
+    } else {
+      ctx.question.srs.lastQuality = Math.max(0, Math.min(5, Number(lastQuality)));
+    }
+    ctx.question.srs.repetitions = Math.max(1, Number(ctx.question.srs.repetitions || 0));
+  } else {
+    // allow updating fields without toggling learned flag
+    if (lastReviewedAt === null) ctx.question.srs.lastReviewedAt = null;
+    else if (typeof lastReviewedAt === "string") ctx.question.srs.lastReviewedAt = lastReviewedAt;
+    if (lastQuality === null) ctx.question.srs.lastQuality = null;
+    else if (lastQuality != null) ctx.question.srs.lastQuality = Math.max(0, Math.min(5, Number(lastQuality)));
+  }
+
+  ctx.question.updatedAt = nowIso();
+  writeDb(db);
+  res.json({ ok: true, srs: ctx.question.srs });
+});
+
 app.delete("/api/questions/:questionId", (req, res) => {
   const questionId = String(req.params.questionId);
   const db = readDb();
@@ -414,48 +422,33 @@ app.delete("/api/questions/:questionId", (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/queue", (req, res) => {
+app.get("/api/queue/review", (req, res) => {
   const db = readDb();
   const bankId = req.query.bankId ? String(req.query.bankId) : null;
   const chapterId = req.query.chapterId ? String(req.query.chapterId) : null;
-  const mode = req.query.mode ? String(req.query.mode) : "mixed"; // due | new | mixed
   const limit = req.query.limit ? Math.max(1, Math.min(200, Number(req.query.limit))) : 30;
 
   const scope = getScope(db, { bankId, chapterId });
   const all = walkQuestions(db, scope);
-  const now = Date.now();
 
   for (const q of all) initSrsIfMissing(q);
 
-  const due = [];
-  const fresh = [];
+  const learned = [];
+  const unlearnedCount = all.reduce((acc, q) => acc + (!q.srs.lastReviewedAt ? 1 : 0), 0);
   for (const q of all) {
-    const dueAt = q.srs && q.srs.dueAt ? Date.parse(q.srs.dueAt) : now;
-    const isNew = !q.srs.lastReviewedAt && q.srs.repetitions === 0;
-    const isDue = dueAt <= now;
-    if (isNew) fresh.push(q);
-    else if (isDue) due.push(q);
+    if (q.srs.lastReviewedAt) learned.push(q);
   }
 
-  // Sort due: earliest due first; new: oldest created first
-  due.sort((a, b) => Date.parse(a.srs.dueAt) - Date.parse(b.srs.dueAt));
-  fresh.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  learned.sort((a, b) => {
+    const qa = a.srs.lastQuality == null ? 999 : Number(a.srs.lastQuality);
+    const qb = b.srs.lastQuality == null ? 999 : Number(b.srs.lastQuality);
+    if (qa !== qb) return qa - qb; // 低分优先
+    const ta = a.srs.lastReviewedAt ? Date.parse(a.srs.lastReviewedAt) : 0;
+    const tb = b.srs.lastReviewedAt ? Date.parse(b.srs.lastReviewedAt) : 0;
+    return ta - tb; // 更久未复习优先
+  });
 
-  let queue = [];
-  if (mode === "due") queue = due;
-  else if (mode === "new") queue = fresh;
-  else {
-    // mixed: prioritize due, interleave some new (3:1)
-    let i = 0, j = 0;
-    while (queue.length < limit && (i < due.length || j < fresh.length)) {
-      for (let k = 0; k < 3 && queue.length < limit && i < due.length; k++) queue.push(due[i++]);
-      if (queue.length < limit && j < fresh.length) queue.push(fresh[j++]);
-      if (i >= due.length && j < fresh.length) while (queue.length < limit && j < fresh.length) queue.push(fresh[j++]);
-      if (j >= fresh.length && i < due.length) while (queue.length < limit && i < due.length) queue.push(due[i++]);
-    }
-  }
-
-  queue = queue.slice(0, limit).map((q) => ({
+  const queue = learned.slice(0, limit).map((q) => ({
     id: q.id,
     title: q.title,
     content: q.content,
@@ -463,9 +456,8 @@ app.get("/api/queue", (req, res) => {
   }));
 
   res.json({
-    mode,
     limit,
-    counts: { due: due.length, new: fresh.length, total: all.length },
+    counts: { learned: learned.length, unlearned: unlearnedCount, total: all.length },
     queue
   });
 });
@@ -485,14 +477,19 @@ app.get("/api/queue/learn", (req, res) => {
   const fresh = [];
   const forgot = [];
   for (const q of all) {
-    const isNew = !q.srs.lastReviewedAt && q.srs.repetitions === 0;
-    const isForgot = !!q.srs.lastReviewedAt && q.srs.repetitions === 0;
+    const isNew = !q.srs.lastReviewedAt;
+    const isForgot = !!q.srs.lastReviewedAt && q.srs.lastQuality != null && Number(q.srs.lastQuality) <= 2;
     if (includeNew && isNew) fresh.push(q);
     if (includeForgot && isForgot) forgot.push(q);
   }
 
   fresh.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
-  forgot.sort((a, b) => Date.parse(a.srs.lastReviewedAt) - Date.parse(b.srs.lastReviewedAt));
+  forgot.sort((a, b) => {
+    const qa = a.srs.lastQuality == null ? 999 : Number(a.srs.lastQuality);
+    const qb = b.srs.lastQuality == null ? 999 : Number(b.srs.lastQuality);
+    if (qa !== qb) return qa - qb;
+    return Date.parse(a.srs.lastReviewedAt) - Date.parse(b.srs.lastReviewedAt);
+  });
 
   const queue = [...forgot.map((q) => ({ q, kind: "forgot" })), ...fresh.map((q) => ({ q, kind: "new" }))]
     .slice(0, limit)
@@ -520,7 +517,7 @@ app.post("/api/review", (req, res) => {
   if (!q) return res.status(404).json({ error: "question_not_found" });
   initSrsIfMissing(q);
 
-  q.srs = sm2Update(q.srs, quality);
+  q.srs = reviewUpdateSimple(q.srs, quality);
   q.updatedAt = nowIso();
   writeDb(db);
   res.json({ ok: true, srs: q.srs });
