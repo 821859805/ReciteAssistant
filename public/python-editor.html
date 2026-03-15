@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReciteAssistant - 代码编辑器</title>
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/vendor/hljs-styles/vs2015.min.css" />
+    <style>
+      /* ========== 编辑器页面专属样式 ========== */
+      .editorPage {
+        display: flex;
+        flex-direction: row;
+        height: 100vh;
+        overflow: hidden;
+        margin-left: 64px;
+      }
+
+      /* ===== 左侧：题目面板 ===== */
+      .questionPanel {
+        width: 420px;
+        min-width: 280px;
+        max-width: calc(50vw - 32px); /* 最大占一半屏幕 */
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid var(--border);
+        background: rgba(9, 9, 11, 0.6);
+        backdrop-filter: blur(12px);
+        overflow: hidden;
+      }
+
+      .qpHeader {
+        flex: 0 0 auto;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(0,0,0,0.15);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .qpSelectors {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .qpSelectors select {
+        flex: 1;
+        min-width: 0;
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        background: rgba(0,0,0,0.3);
+        color: var(--text);
+        border: 1px solid var(--border);
+        outline: none;
+        cursor: pointer;
+        appearance: auto;
+        -webkit-appearance: menulist;
+      }
+
+      .qpSelectors select:focus {
+        border-color: var(--primary);
+      }
+
+      /* 题目导航栏（题目下拉 + 上/下一题） */
+      .qpNav {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(0,0,0,0.1);
+      }
+
+      .qpNav select {
+        flex: 1;
+        min-width: 0;
+        padding: 6px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        background: rgba(0,0,0,0.3);
+        color: var(--text);
+        border: 1px solid var(--border);
+        outline: none;
+        cursor: pointer;
+        appearance: auto;
+        -webkit-appearance: menulist;
+      }
+
+      .qpNav select:focus {
+        border-color: var(--primary);
+      }
+
+      .qpNavBtn {
+        padding: 5px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.03);
+        color: var(--text);
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 11px;
+        transition: all 0.15s ease;
+        white-space: nowrap;
+        flex: 0 0 auto;
+      }
+
+      .qpNavBtn:hover:not(:disabled) {
+        background: rgba(255,255,255,0.08);
+        border-color: var(--primary);
+      }
+
+      .qpNavBtn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+
+      .qpCounter {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--muted);
+        white-space: nowrap;
+        flex: 0 0 auto;
+      }
+
+      /* 题目内容（Markdown 渲染） */
+      .qpContent {
+        flex: 1;
+        overflow: auto;
+        padding: 14px 16px;
+        color: var(--text);
+        font-size: 13.5px;
+        line-height: 1.7;
+      }
+
+      .qpContent h1,.qpContent h2,.qpContent h3,.qpContent h4,.qpContent h5,.qpContent h6 {
+        margin: 14px 0 8px;
+        line-height: 1.3;
+      }
+      .qpContent h1:first-child,.qpContent h2:first-child,.qpContent h3:first-child { margin-top: 0; }
+      .qpContent p { margin: 8px 0; }
+      .qpContent ul,.qpContent ol { margin: 8px 0 8px 18px; padding:0; }
+      .qpContent li { margin: 4px 0; }
+      .qpContent blockquote {
+        margin: 10px 0;
+        padding: 8px 12px;
+        border-left: 3px solid var(--primary);
+        background: rgba(255,255,255,0.03);
+        border-radius: 8px;
+      }
+      .qpContent pre {
+        margin: 10px 0;
+        padding: 0;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: transparent;
+      }
+      .qpContent p code, .qpContent li code, .qpContent td code {
+        background: rgba(255,255,255,0.06);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1px 5px;
+        color: #ce9178;
+        font-size: 12px;
+      }
+      .qpContent pre code {
+        background: transparent;
+        border: none;
+        padding: 0;
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .qpContent hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 12px 0;
+      }
+      .qpContent a { color: var(--primary); }
+      .qpContent .table-wrapper {
+        overflow-x: auto;
+        margin: 10px 0;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+      }
+      .qpContent table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .qpContent thead { background: rgba(255,255,255,0.06); }
+      .qpContent th {
+        padding: 8px 12px;
+        font-weight: 700;
+        border-bottom: 2px solid var(--border);
+        text-align: left;
+      }
+      .qpContent td {
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .qpContent tbody tr:last-child td { border-bottom: none; }
+      .qpContent tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+      .qpEmpty {
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+        padding: 40px 20px;
+      }
+
+      /* ===== 右侧：编辑器区域 ===== */
+      .editorRight {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .editorLayout {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        padding: 10px 14px;
+        gap: 10px;
+      }
+
+      /* 代码区 */
+      .codeSection {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        background: rgba(24, 24, 27, 0.65);
+        backdrop-filter: blur(16px);
+      }
+
+      .codeToolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 14px;
+        background: rgba(0,0,0,0.2);
+        border-bottom: 1px solid var(--border);
+        flex: 0 0 auto;
+      }
+
+      .codeToolbarLeft {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      /* 语言选择器 */
+      .langSelect {
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        background: rgba(255,255,255,.05);
+        color: #ccc;
+        border: 1px solid var(--border);
+        outline: none;
+        cursor: pointer;
+        appearance: auto;
+        -webkit-appearance: menulist;
+      }
+      .langSelect:focus {
+        border-color: var(--primary);
+      }
+
+      .shortcutHint {
+        font-size: 11px;
+        color: #666;
+        padding: 3px 8px;
+        border-radius: 4px;
+        background: rgba(255,255,255,.06);
+      }
+
+      .shortcutHint kbd {
+        display: inline-block;
+        padding: 1px 5px;
+        border-radius: 3px;
+        background: rgba(255,255,255,.05);
+        border: 1px solid rgba(255,255,255,.10);
+        font-family: inherit;
+        font-size: 10px;
+        color: #999;
+        margin: 0 1px;
+      }
+
+      .codeToolbarRight {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .runBtn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 18px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 12px;
+        color: #fff;
+        background: linear-gradient(135deg, #10b981, #059669);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+        transition: all .2s ease;
+      }
+
+      .runBtn:hover {
+        background: linear-gradient(135deg, #34d399, #10b981);
+        box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+        transform: translateY(-1px);
+      }
+
+      .runBtn:disabled {
+        opacity: .5;
+        cursor: not-allowed;
+      }
+
+      .runBtnIcon {
+        font-size: 11px;
+      }
+
+      /* Monaco 编辑器容器 */
+      .monacoWrap {
+        flex: 1;
+        min-height: 0;
+        background: transparent;
+      }
+
+      /* 下方面板：输入 + 输出 */
+      .bottomPanels {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        flex: 0 0 auto;
+        height: 200px;
+        min-height: 120px;
+        max-height: 300px;
+        resize: vertical;
+        overflow: hidden;
+      }
+
+      .ioPanel {
+        display: flex;
+        flex-direction: column;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        background: rgba(24, 24, 27, 0.65);
+        backdrop-filter: blur(16px);
+      }
+
+      .ioPanelHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(0,0,0,0.2);
+        flex: 0 0 auto;
+      }
+
+      .ioPanelTitle {
+        font-weight: 700;
+        font-size: 11px;
+        color: #888;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+      }
+
+      .ioPanelAction {
+        font-size: 10px;
+        color: #666;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: none;
+        background: transparent;
+        transition: color .12s ease;
+      }
+
+      .ioPanelAction:hover {
+        color: #ccc;
+      }
+
+      .ioTextarea {
+        flex: 1;
+        width: 100%;
+        resize: none;
+        border: none;
+        outline: none;
+        padding: 12px 14px;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text);
+        background: transparent;
+        min-height: 0;
+        tab-size: 4;
+      }
+
+      .ioTextarea::placeholder {
+        color: rgba(255,255,255,0.3);
+      }
+
+      .outputContent {
+        flex: 1;
+        overflow: auto;
+        padding: 12px 14px;
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--text);
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+
+      .outputContent.error {
+        color: var(--danger);
+      }
+
+      .outputContent .outputPlaceholder {
+        color: rgba(255,255,255,0.3);
+      }
+
+      .outputStatusBadge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .outputStatusBadge.success {
+        color: var(--ok);
+        background: rgba(16, 185, 129, 0.15);
+      }
+
+      .outputStatusBadge.error {
+        color: var(--danger);
+        background: rgba(239, 68, 68, 0.15);
+      }
+
+      .outputStatusBadge.running {
+        color: var(--primary);
+        background: rgba(59, 130, 246, 0.15);
+      }
+
+      .runMeta {
+        font-size: 11px;
+        color: #666;
+      }
+
+      /* 加载中旋转 */
+      .runSpinner {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(255,255,255,.15);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin .5s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* 分隔条拖拽指示 */
+      .resizeHandle {
+        height: 4px;
+        cursor: row-resize;
+        background: transparent;
+        position: relative;
+        flex: 0 0 auto;
+      }
+
+      .resizeHandle::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 36px;
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(255,255,255,.08);
+        transition: background .15s ease;
+      }
+
+      .resizeHandle:hover::after {
+        background: var(--primary);
+      }
+
+      /* 垂直分隔条 */
+      .vResizeHandle {
+        width: 4px;
+        cursor: col-resize;
+        background: transparent;
+        position: relative;
+        flex: 0 0 auto;
+      }
+
+      .vResizeHandle::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 3px;
+        height: 36px;
+        border-radius: 2px;
+        background: rgba(255,255,255,.08);
+        transition: background .15s ease;
+      }
+
+      .vResizeHandle:hover::after {
+        background: var(--primary);
+      }
+
+      @media (max-width: 980px) {
+        .editorPage {
+          flex-direction: column;
+          margin-left: 0;
+          margin-bottom: 52px;
+          height: calc(100vh - 52px);
+        }
+        .questionPanel {
+          width: 100% !important;
+          max-width: 100%;
+          min-width: 0;
+          height: 45vh;
+          min-height: 200px;
+          border-right: none;
+          border-bottom: 1px solid var(--border);
+        }
+        .vResizeHandle { display: none; }
+        .bottomPanels {
+          grid-template-columns: 1fr;
+          height: 180px;
+          max-height: 250px;
+        }
+        .shortcutHint { display: none; }
+        .qpSelectors { flex-direction: column; }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="activity-bar">
+      <a href="/" class="activity-btn" title="复习">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+        <span class="activity-label">复习</span>
+      </a>
+      <a href="/learn-new.html" class="activity-btn" title="学习">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <span class="activity-label">学习</span>
+      </a>
+      <a href="/manage.html" class="activity-btn" title="题库管理">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span class="activity-label">管理</span>
+      </a>
+      <a href="/python-editor.html" class="activity-btn active" title="代码编辑器">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <span class="activity-label">编辑器</span>
+      </a>
+    </nav>
+
+    <div class="editorPage">
+      <!-- ===== 左侧：题目浏览 ===== -->
+      <div class="questionPanel" id="questionPanel">
+        <div class="qpHeader">
+          <div class="qpSelectors">
+            <select id="qpBankSelect"><option value="">加载题库...</option></select>
+            <select id="qpChapterSelect"><option value="">选择章节</option></select>
+          </div>
+        </div>
+
+        <div class="qpNav">
+          <button class="qpNavBtn" id="qpPrevBtn" disabled>←</button>
+          <select id="qpQuestionSelect"><option value="">选择题目</option></select>
+          <button class="qpNavBtn" id="qpNextBtn" disabled>→</button>
+          <span class="qpCounter" id="qpCounter">0/0</span>
+        </div>
+
+        <!-- 题目内容（Markdown 渲染） -->
+        <div class="qpContent" id="qpContent">
+          <div class="qpEmpty">选择题库 → 章节 → 题目</div>
+        </div>
+      </div>
+
+      <!-- 垂直分隔条 -->
+      <div class="vResizeHandle" id="vResizeHandle"></div>
+
+      <!-- ===== 右侧：编辑器 ===== -->
+      <div class="editorRight">
+        <div class="editorLayout">
+          <!-- 代码区 -->
+          <div class="codeSection">
+            <div class="codeToolbar">
+              <div class="codeToolbarLeft">
+                <select id="langSelect" class="langSelect">
+                  <option value="python">Python</option>
+                  <option value="javascript">JavaScript</option>
+                  <option value="typescript">TypeScript</option>
+                  <option value="go">Go</option>
+                  <option value="java">Java</option>
+                  <option value="c">C</option>
+                  <option value="cpp">C++</option>
+                  <option value="rust">Rust</option>
+                  <option value="bash">Bash</option>
+                  <option value="powershell">PowerShell</option>
+                </select>
+                <div class="shortcutHint">
+                  <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 运行 &nbsp;|&nbsp; <kbd>Ctrl</kbd>+<kbd>S</kbd> 保存
+                </div>
+              </div>
+              <div class="codeToolbarRight">
+                <span class="runMeta" id="runMeta"></span>
+                <button id="runBtn" class="runBtn">
+                  <span class="runBtnIcon">▶</span> 运行
+                </button>
+              </div>
+            </div>
+            <div class="monacoWrap" id="monacoContainer"></div>
+          </div>
+
+          <!-- 可拖拽分隔条 -->
+          <div class="resizeHandle" id="resizeHandle"></div>
+
+          <!-- 下方面板 -->
+          <div class="bottomPanels" id="bottomPanels">
+            <div class="ioPanel">
+              <div class="ioPanelHeader">
+                <div class="ioPanelTitle">📥 测试输入 (stdin)</div>
+                <button id="clearInputBtn" class="ioPanelAction">清空</button>
+              </div>
+              <textarea
+                id="stdinInput"
+                class="ioTextarea"
+                spellcheck="false"
+                placeholder="在此输入测试数据（模拟 stdin）&#10;例如:&#10;5&#10;hello world"
+              ></textarea>
+            </div>
+
+            <div class="ioPanel">
+              <div class="ioPanelHeader">
+                <div class="ioPanelTitle">📤 运行结果</div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span id="outputStatus" class="outputStatusBadge" style="display:none;"></span>
+                  <button id="clearOutputBtn" class="ioPanelAction">清空</button>
+                </div>
+              </div>
+              <div id="outputContent" class="outputContent">
+                <span class="outputPlaceholder">点击 ▶ 运行 或按 Ctrl+Enter 执行代码</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monaco Editor 本地加载 -->
+    <script src="/vs/loader.js"></script>
+    <script src="/hljs-bundle.js"></script>
+    <script src="/hljs-init.js"></script>
+    <script src="/md.js"></script>
+    <script src="/python-editor.js"></script>
+  </body>
+</html>

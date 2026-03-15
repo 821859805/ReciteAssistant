@@ -1,0 +1,1 @@
+ping使用的是icmp协议，http是http协议，防火墙可能禁止了icmp协议

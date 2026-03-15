@@ -1,0 +1,1 @@
+是gc，我们可以用go build xx.go生成可执行文件，go run 直接运行go程序

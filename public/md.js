@@ -1,6 +1,6 @@
 // 简易 Markdown 渲染器（纯前端，无需构建/无外部依赖）
 // - 安全：不支持原始 HTML，所有输入先 escape
-// - 覆盖常用：标题、粗体/斜体、行内代码、代码块、列表、引用、分隔线、链接
+// - 覆盖常用：标题、粗体/斜体、行内代码、代码块、列表、引用、分隔线、链接、表格
 
 (function () {
   function escapeHtml(s) {
@@ -25,7 +25,66 @@
     t = t.replace(/\*\*([^*]+)\*\*/g, (_m, inner) => `<strong>${inner}</strong>`);
     // italic (avoid conflict with bold)
     t = t.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, (_m, pre, inner) => `${pre}<em>${inner}</em>`);
+    // strikethrough ~~text~~
+    t = t.replace(/~~([^~]+)~~/g, (_m, inner) => `<del>${inner}</del>`);
     return t;
+  }
+
+  /** 判断一行是否为表格分隔行（如 |---|---|---| 或 | :---: | --- |） */
+  function isTableSeparator(line) {
+    const trimmed = line.trim();
+    // 去掉首尾的 |
+    const inner = trimmed.replace(/^\|/, "").replace(/\|$/, "");
+    const cells = inner.split("|");
+    if (cells.length === 0) return false;
+    return cells.every(c => /^\s*:?-{1,}:?\s*$/.test(c));
+  }
+
+  /** 解析表格对齐方式 */
+  function parseTableAligns(sepLine) {
+    const inner = sepLine.trim().replace(/^\|/, "").replace(/\|$/, "");
+    return inner.split("|").map(c => {
+      const s = c.trim();
+      const left = s.startsWith(":");
+      const right = s.endsWith(":");
+      if (left && right) return "center";
+      if (right) return "right";
+      return "left";
+    });
+  }
+
+  /** 解析表格行的单元格内容 */
+  function parseTableCells(line) {
+    const trimmed = line.trim();
+    const inner = trimmed.replace(/^\|/, "").replace(/\|$/, "");
+    return inner.split("|").map(c => c.trim());
+  }
+
+  /** 将连续的表格行渲染成 HTML table */
+  function renderTable(headerLine, sepLine, bodyLines) {
+    const aligns = parseTableAligns(sepLine);
+    const headers = parseTableCells(headerLine);
+    const rows = bodyLines.map(l => parseTableCells(l));
+
+    let html = '<div class="table-wrapper"><table>\n<thead>\n<tr>';
+    for (let i = 0; i < headers.length; i++) {
+      const align = aligns[i] || "left";
+      const style = align !== "left" ? ` style="text-align:${align}"` : "";
+      html += `<th${style}>${renderInline(headers[i] || "")}</th>`;
+    }
+    html += "</tr>\n</thead>\n<tbody>\n";
+
+    for (const row of rows) {
+      html += "<tr>";
+      for (let i = 0; i < headers.length; i++) {
+        const align = aligns[i] || "left";
+        const style = align !== "left" ? ` style="text-align:${align}"` : "";
+        html += `<td${style}>${renderInline(row[i] || "")}</td>`;
+      }
+      html += "</tr>\n";
+    }
+    html += "</tbody>\n</table></div>";
+    return html;
   }
 
   function renderMarkdown(md) {
@@ -74,25 +133,21 @@
       const trimmed = line.trim();
 
       // fenced code block (standard-ish): ```lang  / closing ```
-      // 允许前后空格
-      const fence = trimmed.match(/^```([a-zA-Z0-9_-]+)?\s*$/);
+      const fence = trimmed.match(/^```([a-zA-Z0-9_+-]+)?\s*$/);
       if (fence) {
         if (!inCode) {
-          // open
           closeLists();
           closeQuote();
           inCode = true;
           codeLang = (fence[1] || "").trim();
           codeLines = [];
         } else {
-          // close
           closeCodeBlock();
         }
         continue;
       }
 
       if (inCode) {
-        // keep raw escaped line (preserve indentation & spaces)
         codeLines.push(line);
         continue;
       }
@@ -124,6 +179,27 @@
         continue;
       } else {
         closeQuote();
+      }
+
+      // table detection:
+      // current line contains |, next line is separator, and there's at least a header
+      if (trimmed.includes("|") && i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        if (isTableSeparator(nextLine)) {
+          closeLists();
+          // collect table body lines
+          const headerLine = trimmed;
+          const sepLine = nextLine;
+          const bodyLines = [];
+          let j = i + 2;
+          while (j < lines.length && lines[j].trim().includes("|") && lines[j].trim() !== "") {
+            bodyLines.push(lines[j].trim());
+            j++;
+          }
+          out.push(renderTable(headerLine, sepLine, bodyLines));
+          i = j - 1; // skip processed lines
+          continue;
+        }
       }
 
       // headings
@@ -173,4 +249,3 @@
 
   window.renderMarkdown = renderMarkdown;
 })();
-

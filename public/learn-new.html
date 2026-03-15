@@ -5,25 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ReciteAssistant - 新题/遗忘题学习</title>
     <link rel="stylesheet" href="/style.css" />
-    <link rel="stylesheet" href="/vendor/hljs-styles/github.min.css" />
+    <link rel="stylesheet" href="/vendor/hljs-styles/vs2015.min.css" />
   </head>
   <body>
-    <div class="app">
-      <header class="topbar">
-        <div class="brand">
-          <div class="logo">RA</div>
-          <div class="title">
-            <div class="name">新题/遗忘题学习</div>
-            <div class="desc">直接给答案 + 按长度倒计时，结束自动下一题</div>
-          </div>
-        </div>
-        <div class="actions">
-          <a class="btn secondary" href="/">学习页</a>
-          <a class="btn secondary" href="/manage.html">题库管理</a>
-          <a class="btn secondary" href="/api/export">导出题库</a>
-        </div>
-      </header>
+    <nav class="activity-bar">
+      <a href="/" class="activity-btn" title="复习">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+        <span class="activity-label">复习</span>
+      </a>
+      <a href="/learn-new.html" class="activity-btn active" title="学习">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <span class="activity-label">学习</span>
+      </a>
+      <a href="/manage.html" class="activity-btn" title="题库管理">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span class="activity-label">管理</span>
+      </a>
+      <a href="/python-editor.html" class="activity-btn" title="Python编辑器">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <span class="activity-label">Python</span>
+      </a>
+    </nav>
 
+    <div class="app-body">
       <main class="layout">
         <aside class="sidebar">
           <div class="panel">
@@ -41,12 +45,26 @@
           <div class="panel">
             <div class="panelTitle">学习设置</div>
             <div class="field">
-              <div class="label">每次取题数</div>
-              <input id="limitInput" type="number" min="5" max="500" value="30" />
-            </div>
-            <div class="row">
-              <label class="muted"><input id="includeForgot" type="checkbox" checked /> 遗忘题</label>
-              <label class="muted"><input id="includeNew" type="checkbox" checked /> 新题</label>
+              <div class="label">筛选熟练度（可多选）</div>
+              <div class="multiSelect" id="stateMultiSelect">
+                <div class="multiSelectTrigger" id="stateSelectTrigger">
+                  <span class="multiSelectText" id="stateSelectText">熟练度 0, 1</span>
+                  <span class="multiSelectArrow">▾</span>
+                </div>
+                <div class="multiSelectDropdown" id="stateSelectDropdown">
+                  <label class="multiSelectItem"><input type="checkbox" value="0" checked /><span>0 - 新题</span><span class="multiSelectCount" id="stateCount0">0</span></label>
+                  <label class="multiSelectItem"><input type="checkbox" value="1" checked /><span>1 - 学习一遍</span><span class="multiSelectCount" id="stateCount1">0</span></label>
+                  <label class="multiSelectItem"><input type="checkbox" value="2" /><span>2 - 学习两遍</span><span class="multiSelectCount" id="stateCount2">0</span></label>
+                  <label class="multiSelectItem"><input type="checkbox" value="3" /><span>3 - 初步掌握</span><span class="multiSelectCount" id="stateCount3">0</span></label>
+                  <label class="multiSelectItem"><input type="checkbox" value="4" /><span>4 - 基本掌握</span><span class="multiSelectCount" id="stateCount4">0</span></label>
+                  <label class="multiSelectItem"><input type="checkbox" value="5" /><span>5 - 熟练掌握</span><span class="multiSelectCount" id="stateCount5">0</span></label>
+                  <label class="multiSelectItem"><input type="checkbox" value="6" /><span>6 - 完全掌握</span><span class="multiSelectCount" id="stateCount6">0</span></label>
+                  <div class="multiSelectActions">
+                    <button class="miniBtn" id="stateSelectAll">全选</button>
+                    <button class="miniBtn" id="stateSelectNone">全不选</button>
+                  </div>
+                </div>
+              </div>
             </div>
             <button id="startBtn" class="btn primary full">开启学习模式</button>
             <div class="stats" id="stats"></div>
@@ -64,6 +82,16 @@
         </aside>
 
         <section class="content">
+          <div class="learningProgress" id="learningProgress" style="display: none;">
+            <div class="progressInfo">
+              <span>学习进度</span>
+              <div class="progressBar">
+                <div class="progressFill" id="progressFill"></div>
+              </div>
+              <span id="progressText">0/0</span>
+            </div>
+          </div>
+
           <div class="card">
             <div class="cardHeader">
               <div class="badge" id="stageBadge">未开始</div>
@@ -80,6 +108,10 @@
                 </div>
                 <div class="badge" id="timerBadge">--</div>
               </div>
+              <!-- 倒计时衰减进度条 -->
+              <div class="questionTimerBar" id="questionTimerBar" style="display: none;">
+                <div class="questionTimerFill" id="questionTimerFill"></div>
+              </div>
               <div id="answerBody" class="answerBody">提示：开启学习模式后，先等待 10 秒再进入第一题。</div>
             </div>
 
@@ -93,7 +125,8 @@
       </main>
     </div>
 
-    <script type="module" src="/hljs-init.js"></script>
+    <script src="/hljs-bundle.js"></script>
+    <script src="/hljs-init.js"></script>
     <script src="/md.js"></script>
     <script src="/learn-new.js"></script>
   </body>

@@ -1,0 +1,5 @@
+第一，用了太多static静态变量或全局变量。可以通过减少静态变量或使用单例来解决
+
+第二，数据库连接、文件资源没有关闭，建议用try with resource关闭
+
+第三，使用了ThreadLocal，底层通过ThreadLocalMap作为存储，key是弱引用，但是value是强引用，key被回收了之后，value无法被回收，导致内存泄漏，可以用ThreadLocal提供的remove方法移除value

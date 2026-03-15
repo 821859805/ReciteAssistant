@@ -1,0 +1,1 @@
+创建ReentrantLock传入了true就是公平锁，底层会用hasQueuePredecessors（）来判断队列前面是否有线程，如果有，则不会获取锁，这样实现了公平锁。而如果传入false则不会去判断

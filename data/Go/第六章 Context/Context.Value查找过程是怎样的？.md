@@ -1,0 +1,1 @@
+**how：**调用`ctx.Value(key)`时，首先检查当前Context是否包含这个key，如果当前层没有，就会调用`parent.Value(key)`继续向上查找，这个过程会一直递归下去，直到找到匹配的key返回对应的value，或者查找到根Context返回nil

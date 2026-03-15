@@ -1,0 +1,1 @@
+试图重复关闭一个channel、关闭一个值为nil的channel、关闭一个只有接收方向的channel都会panic。

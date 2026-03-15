@@ -64,27 +64,30 @@ function countChars(text) {
   return String(text || "").replace(/\s+/g, "").length;
 }
 
-// 基础时长（秒）：按内容长度给一个“足够背会”的初始预算（再乘以用户节奏系数）
+// 基础时长（秒）：按内容长度给一个“足够背会”的初始预算（相当于之前的4倍时间）
 function baseSecondsFromContent(content) {
   const chars = countEffectiveChars(content);
-  // 经验值：基础 30s + 0.30s/字；并给出更大的上限
-  // 200 字 ≈ 90s；500 字 ≈ 180s；1000 字 ≈ 330s
-  const sec = Math.round(30 + chars * 0.3);
+  // 经验值：基础 30s + 1.20s/字（相当于之前的4倍）；并给出更大的上限
+  // 200 字 ≈ 270s；500 字 ≈ 630s；1000 字 ≈ 1230s
+  const sec = Math.round(30 + chars * 1.2);
   return clamp(sec, 60, 900);
 }
 
 function calcSecondsForQuestion(q, paceMult, qTimeMap) {
-  const base = Math.round(baseSecondsFromContent(q?.content) * paceMult);
-  const rec = qTimeMap && q && q.id ? qTimeMap[q.id] : null;
-  const avg = rec && typeof rec.avg === "number" ? rec.avg : null;
-  // 单题有历史时，至少给到历史平均的 1.1 倍（留出检索/复述缓冲）
-  const sec = avg ? Math.max(base, Math.round(avg * 1.1)) : base;
-  return clamp(sec, 60, 900);
+  const base = baseSecondsFromContent(q?.content);
+  const st = q?.srs?.state || 0;
+  // 熟练度越高，分配时间越少
+  const stateMultipliers = [1.0, 0.8, 0.65, 0.55, 0.45, 0.35, 0.3];
+  const mult = stateMultipliers[st] ?? 0.3;
+  const sec = Math.round(base * mult);
+  return clamp(sec, 30, 900);
 }
+
+const STATE_LABELS = ["新题", "学习一遍", "学习两遍", "初步掌握", "基本掌握", "熟练掌握", "完全掌握"];
 
 const state = {
   db: null,
-  mode: { includeNew: true, includeForgot: true, limit: 30 },
+  selectedStates: new Set([0, 1]),
   scope: { bankId: "", chapterId: "" },
   queue: [],
   seconds: [],
@@ -116,15 +119,26 @@ function scopeLabelText() {
 
 function setStats(counts) {
   const scopeLabel = scopeLabelText();
-  const c = counts || { new: 0, forgot: 0, total: 0 };
+  const c = counts || { matched: 0, total: 0, byState: {} };
   $("stats").innerHTML = `
     <div><b>范围</b>：${scopeLabel}</div>
-    <div><b>遗忘题</b>：${c.forgot}，<b>新题</b>：${c.new}，<b>总题</b>：${c.total}</div>
+    <div><b>已筛选</b>：${c.matched}，<b>总题</b>：${c.total}</div>
   `;
+  // 更新各状态的题目数量
+  const byState = c.byState || {};
+  for (let i = 0; i <= 6; i++) {
+    const el = $(`stateCount${i}`);
+    if (el) el.textContent = byState[i] || 0;
+  }
 }
 
 function fillSelect(selectEl, items, allLabel) {
+  if (!selectEl) {
+    console.error("fillSelect: selectEl is null");
+    return;
+  }
   selectEl.innerHTML = "";
+  selectEl.disabled = false; // 确保下拉框没有被禁用
   const optAll = document.createElement("option");
   optAll.value = "";
   optAll.textContent = allLabel;
@@ -181,6 +195,8 @@ function renderIdle() {
   $("skipBtn").disabled = true;
   $("stopBtn").disabled = true;
   $("kpis").textContent = "已用 00:00 · 剩余 0 · 预计剩余 00:00";
+  const timerBar = $("questionTimerBar");
+  if (timerBar) timerBar.style.display = "none";
 }
 
 function renderWarmup(nowMs) {
@@ -195,12 +211,15 @@ function renderWarmup(nowMs) {
   if ($("learnCharCount")) $("learnCharCount").textContent = "字数：0";
   $("skipBtn").disabled = true;
   $("stopBtn").disabled = false;
+  const timerBar = $("questionTimerBar");
+  if (timerBar) timerBar.style.display = "none";
 }
 
 function renderRunning(nowMs) {
   const q = state.queue[state.idx];
   if (!q) return;
-  $("stageBadge").textContent = q.kind === "forgot" ? "遗忘题" : "新题";
+  const qState = q.state != null ? q.state : (q.srs?.state || 0);
+  $("stageBadge").textContent = `熟练度 ${qState} - ${STATE_LABELS[qState] || "未知"}`;
   const left = Math.ceil(Math.max(0, state.qEndsAt - nowMs) / 1000);
   $("timerBadge").textContent = `${left}s`;
   $("questionTitle").textContent = q.title;
@@ -216,6 +235,38 @@ function renderRunning(nowMs) {
   $("hint").textContent = `本题预算：${alloc}s（根据你的背诵耗时自适应，当前节奏系数 x${state.paceMult.toFixed(2)}）`;
   $("skipBtn").disabled = false;
   $("stopBtn").disabled = false;
+
+  // 更新倒计时衰减进度条
+  const timerBar = $("questionTimerBar");
+  const timerFill = $("questionTimerFill");
+  if (timerBar && timerFill && state.qAllocatedSec) {
+    timerBar.style.display = "block";
+    const elapsed = Math.max(0, (nowMs - state.qStartedAt) / 1000);
+    const remaining = Math.max(0, state.qAllocatedSec - elapsed);
+    const percent = (remaining / state.qAllocatedSec) * 100;
+    timerFill.style.width = `${percent}%`;
+  }
+}
+
+function updateProgress() {
+  const progressEl = $("learningProgress");
+  const progressFill = $("progressFill");
+  const progressText = $("progressText");
+
+  if (!progressEl || !progressFill || !progressText) return;
+
+  const current = state.idx + 1; // 当前已完成的题目数
+  const total = state.queue.length;
+
+  if (total === 0) {
+    progressEl.style.display = "none";
+    return;
+  }
+
+  progressEl.style.display = "block";
+  const percentage = (current / total) * 100;
+  progressFill.style.width = `${percentage}%`;
+  progressText.textContent = `${current}/${total}`;
 }
 
 function renderDone() {
@@ -223,12 +274,16 @@ function renderDone() {
   $("timerBadge").textContent = "--";
   $("questionTitle").textContent = "本轮学习完成。建议休息 2-5 分钟再继续。";
   $("answerBody").innerHTML = window.renderMarkdown
-    ? window.renderMarkdown("你可以再次开启学习模式：遗忘题/新题会按规则进入队列。")
-    : "你可以再次开启学习模式：遗忘题/新题会按规则进入队列。";
+    ? window.renderMarkdown("你可以再次开启学习模式：选中熟练度的题目会按规则进入队列。")
+    : "你可以再次开启学习模式：选中熟练度的题目会按规则进入队列。";
   $("hint").textContent = "";
   if ($("learnCharCount")) $("learnCharCount").textContent = "字数：0";
   $("skipBtn").disabled = true;
   $("stopBtn").disabled = true;
+  updateProgress(); // 完成时更新进度
+  const timerBar = $("questionTimerBar");
+  if (timerBar) timerBar.style.display = "none";
+  exitFullscreen(); // 退出全屏
 }
 
 function updateAdaptiveTiming(reason) {
@@ -269,22 +324,19 @@ function updateAdaptiveTiming(reason) {
 }
 
 async function advanceToNext(reason) {
-  updateAdaptiveTiming(reason);
+  // 不再进行动态时间调整
   const current = state.queue[state.idx];
   if (current) {
-    // 学习（新题/遗忘）：根据是否“提前结束”决定一个初始自评，驱动后续复习优先级
-    // - 提前结束：认为背会了 -> 给偏高分
-    // - 倒计时走完仍自动下一题：认为不够熟 -> 给偏低分
+    // 学习：提前结束和自动结束都给质量1，只用于状态迁移
     try {
-      let quality = 3;
-      if (reason === "auto") quality = current.kind === "forgot" ? 1 : 2;
-      else if (reason === "skip") quality = current.kind === "forgot" ? 3 : 4;
+      const quality = 1; // 统一使用质量1进行状态迁移
       await apiPost("/api/review", { questionId: current.id, quality });
     } catch {
       // 忽略保存失败，仍然继续下一题，避免卡住
     }
   }
   state.idx += 1;
+  updateProgress(); // 更新进度条
   if (state.idx >= state.queue.length) {
     state.stage = "done";
     state.qEndsAt = null;
@@ -323,24 +375,55 @@ function tick() {
 
 async function refreshDbAndSelectors() {
   state.db = await apiGet("/api/db");
-  fillSelect($("bankSelect"), state.db.banks || [], "全部题库");
-  fillSelect($("chapterSelect"), [], "全部章节");
-  setStats({ new: 0, forgot: 0, total: 0 });
+  const bankSelect = $("bankSelect");
+  const chapterSelect = $("chapterSelect");
+  
+  if (!bankSelect) {
+    console.error("bankSelect element not found");
+    return;
+  }
+  if (!chapterSelect) {
+    console.error("chapterSelect element not found");
+    return;
+  }
+  
+  fillSelect(bankSelect, state.db.banks || [], "全部题库");
+  fillSelect(chapterSelect, [], "全部章节");
 }
 
-async function fetchLearnQueue() {
+function getSelectedStates() {
+  const checkboxes = document.querySelectorAll("#stateSelectDropdown input[type='checkbox']");
+  const selected = new Set();
+  for (const cb of checkboxes) {
+    if (cb.checked) selected.add(Number(cb.value));
+  }
+  return selected;
+}
+
+function buildLearnParams() {
   const bankId = $("bankSelect").value;
   const chapterId = $("chapterSelect").value;
-  const limit = Math.max(5, Math.min(500, Number($("limitInput").value || 30)));
-  const includeNew = $("includeNew").checked;
-  const includeForgot = $("includeForgot").checked;
-
+  const selected = getSelectedStates();
+  state.selectedStates = selected;
   const params = new URLSearchParams();
   if (bankId) params.set("bankId", bankId);
   if (chapterId) params.set("chapterId", chapterId);
-  params.set("limit", String(limit));
-  params.set("includeNew", includeNew ? "1" : "0");
-  params.set("includeForgot", includeForgot ? "1" : "0");
+  params.set("states", [...selected].join(","));
+  return params;
+}
+
+async function refreshStats() {
+  try {
+    const params = buildLearnParams();
+    const data = await apiGet(`/api/queue/learn?${params.toString()}`);
+    setStats(data.counts);
+  } catch (e) {
+    console.error("refreshStats failed:", e);
+  }
+}
+
+async function fetchLearnQueue() {
+  const params = buildLearnParams();
   const data = await apiGet(`/api/queue/learn?${params.toString()}`);
   setStats(data.counts);
   return data.queue || [];
@@ -358,9 +441,15 @@ async function startLearning() {
 
     if (state.queue.length === 0) {
       renderIdle();
-      $("answerBody").textContent = "当前范围没有新题或遗忘题。可换范围、导入题目，或去“学习页”复习到期题。";
+      $("answerBody").textContent = "当前范围和所选熟练度下没有匹配的题目。请尝试更换范围或选择其他熟练度。";
       return;
     }
+
+    // 初始化进度条
+    updateProgress();
+
+    // 进入全屏模式
+    enterFullscreen();
 
     state.stage = "warmup";
     state.startedAt = Date.now();
@@ -376,6 +465,53 @@ async function startLearning() {
   }
 }
 
+function enterFullscreen() {
+  // 进入全屏
+  const elem = document.documentElement;
+  if (elem.requestFullscreen) {
+    elem.requestFullscreen().catch(err => console.log("全屏失败:", err));
+  } else if (elem.webkitRequestFullscreen) {
+    elem.webkitRequestFullscreen();
+  } else if (elem.msRequestFullscreen) {
+    elem.msRequestFullscreen();
+  }
+
+  // 防止切换页面
+  window.addEventListener("beforeunload", preventLeave);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+}
+
+function exitFullscreen() {
+  // 退出全屏
+  if (document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  } else if (document.webkitExitFullscreen) {
+    document.webkitExitFullscreen();
+  } else if (document.msExitFullscreen) {
+    document.msExitFullscreen();
+  }
+
+  // 移除防止切换页面的监听
+  window.removeEventListener("beforeunload", preventLeave);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
+}
+
+function preventLeave(e) {
+  if (state.stage === "warmup" || state.stage === "running") {
+    e.preventDefault();
+    e.returnValue = "学习进行中，确定要离开吗？";
+    return e.returnValue;
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.hidden && (state.stage === "warmup" || state.stage === "running")) {
+    // 如果页面被隐藏，尝试重新获取焦点
+    window.focus();
+    alert("学习进行中，请保持页面可见！");
+  }
+}
+
 function stopSession() {
   stopTimer();
   state.stage = "idle";
@@ -388,18 +524,78 @@ function stopSession() {
   state.qAllocatedSec = null;
   state.qEndsAt = null;
   renderIdle();
+  exitFullscreen(); // 退出全屏
+}
+
+function initMultiSelect() {
+  const trigger = $("stateSelectTrigger");
+  const dropdown = $("stateSelectDropdown");
+  if (!trigger || !dropdown) return;
+
+  function updateTriggerText() {
+    const selected = getSelectedStates();
+    state.selectedStates = selected;
+    if (selected.size === 0) {
+      $("stateSelectText").textContent = "未选择任何熟练度";
+    } else if (selected.size === 7) {
+      $("stateSelectText").textContent = "全部熟练度";
+    } else {
+      $("stateSelectText").textContent = "熟练度 " + [...selected].sort((a, b) => a - b).join(", ");
+    }
+  }
+
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    dropdown.classList.toggle("open");
+    trigger.classList.toggle("open");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("#stateMultiSelect")) {
+      if (dropdown.classList.contains("open")) {
+        dropdown.classList.remove("open");
+        trigger.classList.remove("open");
+      }
+    }
+  });
+
+  const checkboxes = dropdown.querySelectorAll("input[type='checkbox']");
+  for (const cb of checkboxes) {
+    cb.addEventListener("change", () => {
+      updateTriggerText();
+      refreshStats();
+    });
+  }
+
+  $("stateSelectAll").addEventListener("click", (e) => {
+    e.preventDefault();
+    for (const cb of checkboxes) cb.checked = true;
+    updateTriggerText();
+    refreshStats();
+  });
+
+  $("stateSelectNone").addEventListener("click", (e) => {
+    e.preventDefault();
+    for (const cb of checkboxes) cb.checked = false;
+    updateTriggerText();
+    refreshStats();
+  });
+
+  updateTriggerText();
 }
 
 function bindEvents() {
   $("bankSelect").addEventListener("change", () => {
     fillChapters();
     renderIdle();
-    setStats({ new: 0, forgot: 0, total: 0 });
+    refreshStats();
   });
   $("chapterSelect").addEventListener("change", () => {
     renderIdle();
-    setStats({ new: 0, forgot: 0, total: 0 });
+    refreshStats();
   });
+
+  initMultiSelect();
 
   $("startBtn").addEventListener("click", startLearning);
   $("skipBtn").addEventListener("click", async () => {
@@ -411,12 +607,31 @@ function bindEvents() {
     if (!confirm("确认结束本轮学习？")) return;
     stopSession();
   });
+
+  // 监听全屏状态变化
+  document.addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement && (state.stage === "warmup" || state.stage === "running")) {
+      // 如果意外退出全屏，尝试重新进入
+      setTimeout(() => enterFullscreen(), 100);
+    }
+  });
+  document.addEventListener("webkitfullscreenchange", () => {
+    if (!document.webkitFullscreenElement && (state.stage === "warmup" || state.stage === "running")) {
+      setTimeout(() => enterFullscreen(), 100);
+    }
+  });
+  document.addEventListener("msfullscreenchange", () => {
+    if (!document.msFullscreenElement && (state.stage === "warmup" || state.stage === "running")) {
+      setTimeout(() => enterFullscreen(), 100);
+    }
+  });
 }
 
 async function main() {
   bindEvents();
   await refreshDbAndSelectors();
   renderIdle();
+  refreshStats();
 }
 
 main().catch((e) => {

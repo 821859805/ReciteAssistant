@@ -1,0 +1,1 @@
+会直接导致panic，向已经关闭channel发送数据时，runtime会检测到channel的closed标志位已经设置，立即抛出“send on closed channel”的panic，这个检查会在上锁前就会判断，所以不会有任何写入的尝试，就直接会panic。

@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  recite-assistant:
+    build: .
+    container_name: recite-assistant
+    ports:
+      - "5179:5179"
+    volumes:
+      # 持久化题库数据到宿主机
+      - ./data:/app/data
+    environment:
+      - PORT=5179
+      - NODE_ENV=production
+    restart: unless-stopped
+
